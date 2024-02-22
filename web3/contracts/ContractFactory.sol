@@ -149,24 +149,20 @@ contract CommunityFactory {
 
     function buyCommToken(
         address tokenAddress,
-        uint tokenQuantity
+        uint256 tokenQuantity
     ) public payable {
         require(msg.sender != address(0), "User is not valid");
         require(
             msg.sender != tokenInformation[tokenAddress].creator,
             "Owner can't buy native token for himself!!"
         );
-        // uint256 totalNativeToken = 10 * tokenQuantity;
-        // require(
-        //     totalNativeToken == msg.value,
-        //     "Please select the specified amount of ether"
-        // );
-        // (bool success, ) = tokenInformation[ABXADDR].creator.call{
-        //     value: msg.value
-        // }("");
-        // require(success, "The transfer is not successful");
+        require(
+            communityInformation[tokenAddress].tokenAddress == address(0),
+            "The community isn't created yet!"
+        );
+
         token = ERC20Token(ABXADDR);
-        //burning ABX token
+
         token.burn(msg.sender, tokenQuantity / 10); //EVERYONE CAN CALL THE MINT FUNCTION
         token = ERC20Token(tokenAddress);
         //minting native token
