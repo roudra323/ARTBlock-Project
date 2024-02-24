@@ -2,7 +2,6 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract ERC20Token is ERC20, Ownable {
@@ -30,8 +29,12 @@ contract ERC20Token is ERC20, Ownable {
 }
 
 contract CommunityFactory {
-    address private ABXADDR;
-    ERC20Token public token;
+    // Mappings
+    mapping(address => CommunityInfo) public communityInformation;
+    mapping(address => TokenInfo) public tokenInformation;
+    mapping(address => mapping(address => bool)) public communityMemberships; // Mapping to track community memberships
+
+    // Structs
     struct CommunityInfo {
         string name;
         string description;
@@ -45,6 +48,25 @@ contract CommunityFactory {
         address creator;
     }
 
+    // Events
+    event CommunityCreated(
+        address indexed communityTokenAddress,
+        string communityName,
+        string communityDescription
+    );
+    event TokenCreatedERC20(
+        string indexed tokenSymbol,
+        string tokenName,
+        address indexed owner
+    );
+    event JoinedCommunity(address indexed member, address indexed community);
+
+    // State variables
+    address private ABXADDR;
+    ERC20Token public token;
+    address[] public listedCommunities;
+
+    // Constructor
     constructor() {
         ERC20Token newToken = new ERC20Token("ABX TOKEN", "ABX", msg.sender);
         tokenInformation[address(newToken)] = TokenInfo({
@@ -55,15 +77,7 @@ contract CommunityFactory {
         ABXADDR = address(newToken);
     }
 
-    mapping(address => CommunityInfo) public communityInformation;
-    mapping(address => TokenInfo) public tokenInformation;
-    address[] listedCommunities;
-
-    event CommunityCreated(
-        address indexed communityTokenAddress,
-        string communityName,
-        string communityDescription
-    );
+    // Functions
 
     /// @notice Allows users to buy ABX tokens by sending ETH where  10 wei = 1 ABX tokens.
     /// @param _avxquantity The quantity of ABX to purchase.
@@ -147,10 +161,21 @@ contract CommunityFactory {
         );
     }
 
-    function buyCommToken(
-        address tokenAddress,
-        uint256 tokenQuantity
-    ) public payable {
+    // Function for users to join a community
+    function joinCommunity(address communityAddress) external {
+        require(
+            communityInformation[communityAddress].creator != address(0),
+            "Community does not exist"
+        );
+        communityMemberships[msg.sender][communityAddress] = true;
+        emit JoinedCommunity(msg.sender, communityAddress);
+    }
+
+    function buyCommToken(address tokenAddress, uint256 tokenQuantity)
+        public
+        payable
+        onlyCommunityMember(tokenAddress)
+    {
         require(msg.sender != address(0), "User is not valid");
         require(
             msg.sender != tokenInformation[tokenAddress].creator,
@@ -169,19 +194,33 @@ contract CommunityFactory {
         token.mint(msg.sender, tokenQuantity); //EVERYONE CAN CALL THE MINT FUNCTION
     }
 
-    function getCommTokenBal(
-        address tokenAddress
-    ) public view returns (uint256) {
+    function getCommTokenBal(address tokenAddress)
+        public
+        view
+        returns (uint256)
+    {
         ERC20Token tokenContract = ERC20Token(tokenAddress);
         return tokenContract.balanceOf(msg.sender);
     }
 
-    function ABXtokenBal() public view returns (uint256) {
-        ERC20Token tokenContract = ERC20Token(ABXADDR);
-        return tokenContract.balanceOf(msg.sender);
+    function ABXtokenBal() public returns (uint256) {
+        // ERC20Token tokenContract = ERC20Token(ABXADDR);
+        token = ERC20Token(ABXADDR);
+        return token.balanceOf(msg.sender);
     }
 
     function getAllCommunities() external view returns (address[] memory) {
         return listedCommunities;
+    }
+
+    // Modifiers
+
+    // Modifier to check if the caller is a member of the given community
+    modifier onlyCommunityMember(address communityAddress) {
+        require(
+            communityMemberships[msg.sender][communityAddress],
+            "Not a member of the community"
+        );
+        _;
     }
 }
