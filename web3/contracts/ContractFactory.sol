@@ -64,7 +64,7 @@ contract CommunityFactory {
     // State variables
     address private ABXADDR;
     ERC20Token public token;
-    address[] public listedCommunities;
+    address[] listedCommunities;
 
     // Constructor
     constructor() {
@@ -134,7 +134,7 @@ contract CommunityFactory {
             ABXtokenBal() >= 100,
             "You don't have enough balance to create community."
         );
-        require(100 == msg.value, "Please select 100 wei to create community");
+        // require(100 == msg.value, "Please select 100 wei to create community");
 
         token = ERC20Token(ABXADDR);
         token.burn(msg.sender, 100); //EVERYONE CAN CALL THE BURN FUNCTION
@@ -203,10 +203,10 @@ contract CommunityFactory {
         return tokenContract.balanceOf(msg.sender);
     }
 
-    function ABXtokenBal() public returns (uint256) {
-        // ERC20Token tokenContract = ERC20Token(ABXADDR);
-        token = ERC20Token(ABXADDR);
-        return token.balanceOf(msg.sender);
+    function ABXtokenBal() public view returns (uint256) {
+        ERC20Token tokenContract = ERC20Token(ABXADDR);
+        // token = ERC20Token(ABXADDR);
+        return tokenContract.balanceOf(msg.sender);
     }
 
     function getAllCommunities() external view returns (address[] memory) {
