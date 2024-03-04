@@ -11,20 +11,31 @@ contract ERC20Token is ERC20, Ownable {
         address indexed owner
     );
 
+    address private immutable mainContract;
+
     constructor(
         string memory initialName,
         string memory initialSymbol,
         address initialOwner
     ) ERC20(initialName, initialSymbol) Ownable(initialOwner) {
+        mainContract = msg.sender;
         emit TokenCreatedERC20(initialSymbol, initialName, initialOwner);
     }
 
-    function mint(address to, uint256 amount) external {
+
+
+    function mint(address to, uint256 amount) external lockedCheck(){
         _mint(to, amount);
     }
 
-    function burn(address from, uint256 amount) external {
+    function burn(address from, uint256 amount) external lockedCheck(){
         _burn(from, amount);
+    }
+
+    modifier lockedCheck(){
+        CommunityFactory mContract = CommunityFactory(mainContract);
+        require(!mContract.lockedStatus(), "Community is locked");
+        _;
     }
 }
 
@@ -33,6 +44,7 @@ contract CommunityFactory {
     mapping(address => CommunityInfo) public communityInformation;
     mapping(address => TokenInfo) public tokenInformation;
     mapping(address => mapping(address => bool)) public communityMemberships; // Mapping to track community memberships
+    // mapping(address => mapping(bytes4 => bool))
 
     // Structs
     struct CommunityInfo {
@@ -65,6 +77,7 @@ contract CommunityFactory {
     address private ABXADDR;
     ERC20Token public token;
     address[] listedCommunities;
+    bool public isLocked = true;
 
     // Constructor
     constructor() {
@@ -78,6 +91,11 @@ contract CommunityFactory {
     }
 
     // Functions
+
+    function lockedStatus() external view returns(bool){
+        return isLocked;
+    }
+    
 
     /// @notice Allows users to buy ABX tokens by sending ETH where  10 wei = 1 ABX tokens.
     /// @param _avxquantity The quantity of ABX to purchase.
@@ -97,7 +115,9 @@ contract CommunityFactory {
         }("");
         require(success, "The transfer is not successful");
         token = ERC20Token(ABXADDR);
+        isLocked = false;
         token.mint(msg.sender, _avxquantity); //EVERYONE CAN CALL THE MINT FUNCTION
+        isLocked = true;
     }
 
     /// @notice Creates a new ERC20 token internally.
@@ -137,8 +157,9 @@ contract CommunityFactory {
         // require(100 == msg.value, "Please select 100 wei to create community");
 
         token = ERC20Token(ABXADDR);
+        isLocked = false;
         token.burn(msg.sender, 100); //EVERYONE CAN CALL THE BURN FUNCTION
-
+        isLocked = true;
         ERC20Token communityToken = createToken(
             tokenName,
             tokenSymbol,
@@ -187,11 +208,14 @@ contract CommunityFactory {
         );
 
         token = ERC20Token(ABXADDR);
-
+        isLocked = false;
         token.burn(msg.sender, tokenQuantity / 10); //EVERYONE CAN CALL THE MINT FUNCTION
+        isLocked = true;
         token = ERC20Token(tokenAddress);
         //minting native token
+        isLocked = false;
         token.mint(msg.sender, tokenQuantity); //EVERYONE CAN CALL THE MINT FUNCTION
+        isLocked = true;
     }
 
     function getCommTokenBal(address tokenAddress)
