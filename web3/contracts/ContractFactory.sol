@@ -4,6 +4,10 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+/**
+ * @title ERC20Token
+ * @dev Extends ERC20 and Ownable contracts to create a custom ERC20 token.
+ */
 contract ERC20Token is ERC20, Ownable {
     event TokenCreatedERC20(
         string indexed tokenSymbol,
@@ -13,6 +17,12 @@ contract ERC20Token is ERC20, Ownable {
 
     address private immutable mainContract;
 
+    /**
+     * @dev Constructor to initialize the ERC20 token.
+     * @param initialName The name of the token.
+     * @param initialSymbol The symbol of the token.
+     * @param initialOwner The initial owner of the token.
+     */
     constructor(
         string memory initialName,
         string memory initialSymbol,
@@ -22,16 +32,27 @@ contract ERC20Token is ERC20, Ownable {
         emit TokenCreatedERC20(initialSymbol, initialName, initialOwner);
     }
 
-
-
+    /**
+     * @dev Mints new tokens and sends them to the specified address.
+     * @param to The address to which new tokens will be minted.
+     * @param amount The amount of tokens to mint.
+     */
     function mint(address to, uint256 amount) external lockedCheck(){
         _mint(to, amount);
     }
 
+    /**
+     * @dev Burns existing tokens from the specified address.
+     * @param from The address from which tokens will be burned.
+     * @param amount The amount of tokens to burn.
+     */
     function burn(address from, uint256 amount) external lockedCheck(){
         _burn(from, amount);
     }
 
+    /**
+     * @dev Modifier to check if the community is locked.
+     */
     modifier lockedCheck(){
         CommunityFactory mContract = CommunityFactory(mainContract);
         require(!mContract.lockedStatus(), "Community is locked");
@@ -39,12 +60,15 @@ contract ERC20Token is ERC20, Ownable {
     }
 }
 
+/**
+ * @title CommunityFactory
+ * @dev Manages the creation and functionalities of communities and associated ERC20 tokens.
+ */
 contract CommunityFactory {
     // Mappings
     mapping(address => CommunityInfo) public communityInformation;
     mapping(address => TokenInfo) public tokenInformation;
-    mapping(address => mapping(address => bool)) public communityMemberships; // Mapping to track community memberships
-    // mapping(address => mapping(bytes4 => bool))
+    mapping(address => mapping(address => bool)) public communityMemberships;
 
     // Structs
     struct CommunityInfo {
@@ -92,13 +116,18 @@ contract CommunityFactory {
 
     // Functions
 
+    /**
+     * @dev Retrieves the locked status of the community.
+     * @return A boolean indicating whether the community is locked or not.
+     */
     function lockedStatus() external view returns(bool){
         return isLocked;
     }
     
-
-    /// @notice Allows users to buy ABX tokens by sending ETH where  10 wei = 1 ABX tokens.
-    /// @param _avxquantity The quantity of ABX to purchase.
+    /**
+     * @dev Allows users to buy ABX tokens by sending ETH where 10 wei = 1 ABX token.
+     * @param _avxquantity The quantity of ABX to purchase.
+     */
     function buyABX(uint256 _avxquantity) external payable {
         require(msg.sender != address(0), "User is not valid");
         require(
@@ -116,15 +145,17 @@ contract CommunityFactory {
         require(success, "The transfer is not successful");
         token = ERC20Token(ABXADDR);
         isLocked = false;
-        token.mint(msg.sender, _avxquantity); //EVERYONE CAN CALL THE MINT FUNCTION
+        token.mint(msg.sender, _avxquantity); // EVERYONE CAN CALL THE MINT FUNCTION
         isLocked = true;
     }
 
-    /// @notice Creates a new ERC20 token internally.
-    /// @param tokenName The name of the new token.
-    /// @param tokenSymbol The symbol of the new token.
-    /// @param creator The address of the token creator.
-    /// @return An ERC20Token contract representing the newly created token.
+    /**
+     * @dev Creates a new ERC20 token internally.
+     * @param tokenName The name of the new token.
+     * @param tokenSymbol The symbol of the new token.
+     * @param creator The address of the token creator.
+     * @return An ERC20Token contract representing the newly created token.
+     */
     function createToken(
         string memory tokenName,
         string memory tokenSymbol,
@@ -139,11 +170,13 @@ contract CommunityFactory {
         return newToken;
     }
 
-    /// @notice Creates a new community and an associated ERC20 token.
-    /// @param communityName The name of the new community.
-    /// @param communityDescription A description of the community.
-    /// @param tokenName The name of the community's ERC20 token.
-    /// @param tokenSymbol The symbol of the community's ERC20 token.
+    /**
+     * @dev Creates a new community and an associated ERC20 token.
+     * @param communityName The name of the new community.
+     * @param communityDescription A description of the community.
+     * @param tokenName The name of the community's ERC20 token.
+     * @param tokenSymbol The symbol of the community's ERC20 token.
+     */
     function createCommunity(
         string memory communityName,
         string memory communityDescription,
@@ -154,11 +187,10 @@ contract CommunityFactory {
             ABXtokenBal() >= 100,
             "You don't have enough balance to create community."
         );
-        // require(100 == msg.value, "Please select 100 wei to create community");
 
         token = ERC20Token(ABXADDR);
         isLocked = false;
-        token.burn(msg.sender, 100); //EVERYONE CAN CALL THE BURN FUNCTION
+        token.burn(msg.sender, 100); // EVERYONE CAN CALL THE BURN FUNCTION
         isLocked = true;
         ERC20Token communityToken = createToken(
             tokenName,
@@ -182,7 +214,10 @@ contract CommunityFactory {
         );
     }
 
-    // Function for users to join a community
+    /**
+     * @dev Function for users to join a community.
+     * @param communityAddress The address of the community to join.
+     */
     function joinCommunity(address communityAddress) external {
         require(
             communityInformation[communityAddress].creator != address(0),
@@ -192,6 +227,11 @@ contract CommunityFactory {
         emit JoinedCommunity(msg.sender, communityAddress);
     }
 
+    /**
+     * @dev Allows users to buy native tokens of the community.
+     * @param tokenAddress The address of the community's ERC20 token.
+     * @param tokenQuantity The quantity of tokens to purchase.
+     */
     function buyCommToken(address tokenAddress, uint256 tokenQuantity)
         public
         payable
@@ -209,15 +249,20 @@ contract CommunityFactory {
 
         token = ERC20Token(ABXADDR);
         isLocked = false;
-        token.burn(msg.sender, tokenQuantity / 10); //EVERYONE CAN CALL THE MINT FUNCTION
+        token.burn(msg.sender, tokenQuantity / 10); // EVERYONE CAN CALL THE MINT FUNCTION
         isLocked = true;
         token = ERC20Token(tokenAddress);
-        //minting native token
+        // Minting native token
         isLocked = false;
-        token.mint(msg.sender, tokenQuantity); //EVERYONE CAN CALL THE MINT FUNCTION
+        token.mint(msg.sender, tokenQuantity); // EVERYONE CAN CALL THE MINT FUNCTION
         isLocked = true;
     }
 
+    /**
+     * @dev Retrieves the token balance of the user for a specific token.
+     * @param tokenAddress The address of the token.
+     * @return The token balance of the user.
+     */
     function getCommTokenBal(address tokenAddress)
         public
         view
@@ -227,19 +272,29 @@ contract CommunityFactory {
         return tokenContract.balanceOf(msg.sender);
     }
 
+    /**
+     * @dev Retrieves the balance of the ABX token for the user.
+     * @return The balance of ABX tokens for the user.
+     */
     function ABXtokenBal() public view returns (uint256) {
         ERC20Token tokenContract = ERC20Token(ABXADDR);
-        // token = ERC20Token(ABXADDR);
         return tokenContract.balanceOf(msg.sender);
     }
 
+    /**
+     * @dev Retrieves all the listed communities.
+     * @return An array containing the addresses of all listed communities.
+     */
     function getAllCommunities() external view returns (address[] memory) {
         return listedCommunities;
     }
 
     // Modifiers
 
-    // Modifier to check if the caller is a member of the given community
+    /**
+     * @dev Modifier to check if the caller is a member of the given community.
+     * @param communityAddress The address of the community.
+     */
     modifier onlyCommunityMember(address communityAddress) {
         require(
             communityMemberships[msg.sender][communityAddress],
