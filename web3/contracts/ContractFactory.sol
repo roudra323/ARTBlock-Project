@@ -37,7 +37,7 @@ contract ERC20Token is ERC20, Ownable {
      * @param to The address to which new tokens will be minted.
      * @param amount The amount of tokens to mint.
      */
-    function mint(address to, uint256 amount) external lockedCheck(){
+    function mint(address to, uint256 amount) external lockedCheck {
         _mint(to, amount);
     }
 
@@ -46,14 +46,14 @@ contract ERC20Token is ERC20, Ownable {
      * @param from The address from which tokens will be burned.
      * @param amount The amount of tokens to burn.
      */
-    function burn(address from, uint256 amount) external lockedCheck(){
+    function burn(address from, uint256 amount) external lockedCheck {
         _burn(from, amount);
     }
 
     /**
      * @dev Modifier to check if the community is locked.
      */
-    modifier lockedCheck(){
+    modifier lockedCheck() {
         CommunityFactory mContract = CommunityFactory(mainContract);
         require(!mContract.lockedStatus(), "Community is locked");
         _;
@@ -69,6 +69,12 @@ contract CommunityFactory {
     mapping(address => CommunityInfo) public communityInformation;
     mapping(address => TokenInfo) public tokenInformation;
     mapping(address => mapping(address => bool)) public communityMemberships;
+    mapping(address => mapping(bytes4 => ProductInfo)) commListedProd; // should do nested mapping and separate functions for listed and
+    mapping(address => mapping(bytes4 => ProductInfo)) commApprovedProd; // should do nested mapping and separate functions for listed and
+    // approved products
+    mapping(bytes4 => int256) commProdVote;
+    mapping(bytes4 => ProductInfo) commProdInfo;
+    mapping(address => mapping(bytes4 => bool)) hasVoted;
 
     // Structs
     struct CommunityInfo {
@@ -82,6 +88,17 @@ contract CommunityFactory {
         string name;
         string symbol;
         address creator;
+    }
+
+    struct ProductInfo {
+        string pdName;
+        string pdDesc;
+        address pdCommunity;
+        bool isExclusive;
+        uint16 prdPrice;
+        bool listedForVote;
+        bool listedForSale;
+        int256 voteWeight;
     }
 
     // Events
@@ -101,6 +118,8 @@ contract CommunityFactory {
     address private ABXADDR;
     ERC20Token public token;
     address[] listedCommunities;
+    ProductInfo[] listedForVoting;
+    ProductInfo[] listedForMarket;
     bool public isLocked = true;
 
     // Constructor
@@ -120,10 +139,10 @@ contract CommunityFactory {
      * @dev Retrieves the locked status of the community.
      * @return A boolean indicating whether the community is locked or not.
      */
-    function lockedStatus() external view returns(bool){
+    function lockedStatus() external view returns (bool) {
         return isLocked;
     }
-    
+
     /**
      * @dev Allows users to buy ABX tokens by sending ETH where 10 wei = 1 ABX token.
      * @param _avxquantity The quantity of ABX to purchase.
@@ -206,6 +225,9 @@ contract CommunityFactory {
         });
 
         listedCommunities.push(address(communityToken));
+        communityMemberships[msg.sender][address(communityToken)] = true;
+
+        emit JoinedCommunity(msg.sender, address(communityToken));
 
         emit CommunityCreated(
             address(communityToken),
@@ -238,12 +260,12 @@ contract CommunityFactory {
         onlyCommunityMember(tokenAddress)
     {
         require(msg.sender != address(0), "User is not valid");
+        // require(
+        //     msg.sender != tokenInformation[tokenAddress].creator,
+        //     "Owner can't buy native token for himself!!"
+        // );
         require(
-            msg.sender != tokenInformation[tokenAddress].creator,
-            "Owner can't buy native token for himself!!"
-        );
-        require(
-            communityInformation[tokenAddress].tokenAddress == address(0),
+            communityInformation[tokenAddress].tokenAddress != address(0),
             "The community isn't created yet!"
         );
 
@@ -287,6 +309,150 @@ contract CommunityFactory {
      */
     function getAllCommunities() external view returns (address[] memory) {
         return listedCommunities;
+    }
+
+    // Functions for MileStone-2
+
+    /**
+     * @dev Publishes a product for voting.
+     * @param name The name of the product.
+     * @param description The description of the product.
+     * @param comAddr The address of the community.
+     * @param isExclusive Whether the product is exclusive or not.
+     * @param prdPrice The price of the product.
+     */
+    function publishProduct(
+        string memory name,
+        string memory description,
+        address comAddr,
+        bool isExclusive,
+        uint8 prdPrice
+    ) external {
+        require(
+            communityInformation[comAddr].tokenAddress == address(0),
+            "Community dosent exist"
+        );
+        require(
+            communityInformation[comAddr].creator == msg.sender,
+            "Only creator can publish Arts"
+        );
+        // Calculate the minimum required token balance
+        // considering potential loss of precision due to division
+        uint256 min_token_balance = (prdPrice * 50) / 100;
+
+        // Check if the token balance is sufficient
+        require(
+            getCommTokenBal(comAddr) >= min_token_balance,
+            "You don't have enough community token."
+        );
+
+        token = ERC20Token(comAddr);
+        // Stacking 50% of product price
+        isLocked = false;
+        token.burn(msg.sender, min_token_balance);
+        isLocked = true;
+
+        ProductInfo memory tempPrd = ProductInfo(
+            name,
+            description,
+            comAddr,
+            isExclusive,
+            prdPrice,
+            true,
+            false,
+            0
+        );
+
+        bytes4 code = getCode(comAddr, name, prdPrice);
+        // listed for vote = True
+        listedForVoting.push(tempPrd);
+        commListedProd[comAddr][code] = tempPrd; // created product
+    }
+
+    function upVote(
+        string memory name,
+        address communiAddr,
+        uint8 prdPrice
+    ) external onlyCommunityMember(communiAddr) {
+        bytes4 code = getCode(communiAddr, name, prdPrice);
+        require(
+            !hasVoted[msg.sender][code],
+            "You have already voted for this product."
+        );
+        uint256 tokenBalance = getCommTokenBal(msg.sender);
+        commProdVote[code] += int256(tokenBalance);
+        hasVoted[msg.sender][code] = true;
+    }
+
+    function downVote(
+        string memory name,
+        address communiAddr,
+        uint8 prdPrice
+    ) external onlyCommunityMember(communiAddr) {
+        bytes4 code = getCode(communiAddr, name, prdPrice);
+        require(
+            !hasVoted[msg.sender][code],
+            "You have already voted for this product."
+        );
+        uint256 tokenBalance = getCommTokenBal(msg.sender);
+        commProdVote[code] -= int256(tokenBalance);
+        hasVoted[msg.sender][code] = true;
+    }
+
+    // Need an oracal to call this function every 24 hours
+    function voteResult(
+        string memory name,
+        address communiAddr,
+        uint8 prdPrice
+    ) external {
+        bytes4 code = getCode(communiAddr, name, prdPrice);
+        if (commProdVote[code] >= 0) {
+            commListedProd[communiAddr][code].listedForSale = true;
+            commListedProd[communiAddr][code].voteWeight = commProdVote[code];
+            listedForMarket.push(commListedProd[communiAddr][code]);
+
+            token = ERC20Token(communiAddr);
+            // Stacking 50% of product price
+            isLocked = false;
+            token.mint(msg.sender, (prdPrice * 50) / 100);
+            isLocked = true;
+        } else {
+            isLocked = false;
+            token.mint(msg.sender, (prdPrice * 25) / 100); // returning 25% of product price if not voted
+            isLocked = true;
+        }
+    }
+
+    /**
+
+
+    */
+    function getAllPendingPrd() external view returns (ProductInfo[] memory) {
+        return listedForVoting;
+    }
+
+    /**
+
+
+    */
+    function getAllMktPrd() external view returns (ProductInfo[] memory) {
+        return listedForMarket;
+    }
+
+    // Internal functions
+
+    function getCode(
+        address comm,
+        string memory name,
+        uint8 price
+    ) internal view returns (bytes4) {
+        bytes memory data = abi.encodePacked(
+            comm,
+            name,
+            price,
+            block.timestamp
+        );
+        return bytes4(keccak256(data));
     }
 
     // Modifiers
