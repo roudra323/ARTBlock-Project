@@ -69,9 +69,8 @@ contract CommunityFactory {
     mapping(address => CommunityInfo) public communityInformation;
     mapping(address => TokenInfo) public tokenInformation;
     mapping(address => mapping(address => bool)) public communityMemberships;
-    mapping(address => mapping(bytes4 => ProductInfo)) commListedProd; // should do nested mapping and separate functions for listed and
-    mapping(address => mapping(bytes4 => ProductInfo)) commApprovedProd; // should do nested mapping and separate functions for listed and
-    // approved products
+    mapping(address => mapping(bytes4 => ProductInfo)) commListedProd; 
+    mapping(address => mapping(bytes4 => ProductInfo)) commApprovedProd; 
     mapping(bytes4 => int256) commProdVote;
     mapping(bytes4 => ProductInfo) commProdInfo;
     mapping(address => mapping(bytes4 => bool)) hasVoted;
