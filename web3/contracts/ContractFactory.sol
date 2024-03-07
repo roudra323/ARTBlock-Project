@@ -244,6 +244,10 @@ contract CommunityFactory {
             communityInformation[communityAddress].creator != address(0),
             "Community does not exist"
         );
+        require(
+            !communityMemberships[msg.sender][communityAddress],
+            "User is already a member of the community"
+        );
         communityMemberships[msg.sender][communityAddress] = true;
         emit JoinedCommunity(msg.sender, communityAddress);
     }
