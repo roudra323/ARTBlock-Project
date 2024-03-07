@@ -196,7 +196,7 @@ describe("ContractFactory", function () {
       // create a community
       await contract
         .connect(addr1)
-        .createCommunity("Test Community", "TST", "T", "TKT");
+        .createCommunity(anyValue, anyValue, anyValue, anyValue);
       const communityList = await contract.getAllCommunities();
       const communityAddr = communityList[0];
       await contract.connect(addr2).joinCommunity(communityAddr);
