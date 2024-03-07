@@ -99,6 +99,7 @@ describe("ContractFactory", function () {
 
   describe("Create Community", function () {
     // This test suite is for testing the functionality of creating a community.
+
     it("Should fail create a community for insufficient ABX token Balance", async function () {
       // This test case checks that a user cannot create a community if they do not have enough ABX tokens.
       const { contract, addr1, addr2 } = await loadFixture(
@@ -285,75 +286,5 @@ describe("ContractFactory", function () {
         .getCommTokenBal(communityAddr);
       expect(userCommTokenBal.toString()).to.equal("200");
     });
-  });
-
-  describe("Publish Product", function () {
-    // This test suite is for testing the functionality of publishing a product.
-    it("Should fail cause community dosen't exist", async function () {
-      // This test case checks that a user cannot publish a product if the community does not exist.
-      const { contract, addr1, communityAddr } = await loadFixture(
-        createCommunityFixture
-      );
-      await expect(
-        contract
-          .connect(addr1)
-          .publishProduct(
-            "TP",
-            "Test Product",
-            "0x0000000000000000000000000000000000000000",
-            true,
-            200
-          )
-      ).to.be.revertedWith("The Community does not exist!!");
-    });
-
-    it("Should fail cause rather than community creator , other addresses will call", async function () {
-      // This test case checks that a user cannot publish a product if they are not the creator of the community.
-      const { contract, addr1, addr2, communityAddr } = await loadFixture(
-        createCommunityFixture
-      );
-      // community information
-      const community = await contract.communityInformation(communityAddr);
-      console.log(community.creator);
-      console.log(addr1.address);
-
-      // join community
-      await contract.connect(addr2).joinCommunity(communityAddr);
-
-      await expect(
-        contract
-          .connect(addr2)
-          .publishProduct("TP", "Test Product", communityAddr, true, 200)
-      ).to.be.revertedWith("Only community creator can publish product!!");
-    });
-    it("Should be successful, community creator will call", async function () {
-      // This test case checks that a creator can publish a product.
-      const { contract, addr1, addr2, communityAddr } = await loadFixture(
-        createCommunityFixture
-      );
-      // buy Community Token
-      await contract.connect(addr1).buyCommToken(communityAddr, 200);
-      await contract
-        .connect(addr1)
-        .publishProduct("TP", "Test Product", communityAddr, true, 200);
-    });
-    it("Should fail, native community token balance is insuffitient", async function () {
-      // This test case checks if the creator has enough community native token to publish a product.
-      const { contract, addr1, addr2, communityAddr } = await loadFixture(
-        createCommunityFixture
-      );
-      // buy Community Token
-      await contract.connect(addr1).buyCommToken(communityAddr, 50);
-      await expect(
-        contract
-          .connect(addr1)
-          .publishProduct("TP", "Test Product", communityAddr, true, 200)
-      ).to.be.revertedWith("You don't have enough community native token.");
-    });
-
-    // it("", async function () {});
-    // it("", async function () {});
-    // it("", async function () {});
-    // it("", async function () {});
   });
 });

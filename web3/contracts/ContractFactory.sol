@@ -69,8 +69,8 @@ contract CommunityFactory {
     mapping(address => CommunityInfo) public communityInformation;
     mapping(address => TokenInfo) public tokenInformation;
     mapping(address => mapping(address => bool)) public communityMemberships;
-    mapping(address => mapping(bytes4 => ProductInfo)) commListedProd; 
-    mapping(address => mapping(bytes4 => ProductInfo)) commApprovedProd; 
+    mapping(address => mapping(bytes4 => ProductInfo)) commListedProd;
+    mapping(address => mapping(bytes4 => ProductInfo)) commApprovedProd;
     mapping(bytes4 => int256) commProdVote;
     mapping(bytes4 => ProductInfo) commProdInfo;
     mapping(address => mapping(bytes4 => bool)) hasVoted;
@@ -257,21 +257,15 @@ contract CommunityFactory {
      * @param tokenAddress The address of the community's ERC20 token.
      * @param tokenQuantity The quantity of tokens to purchase.
      */
-    function buyCommToken(address tokenAddress, uint256 tokenQuantity)
-        public
-        payable
-        onlyCommunityMember(tokenAddress)
-    {
-        require(msg.sender != address(0), "User is not valid");
-        // require(
-        //     msg.sender != tokenInformation[tokenAddress].creator,
-        //     "Owner can't buy native token for himself!!"
-        // );
+    function buyCommToken(
+        address tokenAddress,
+        uint256 tokenQuantity
+    ) public payable onlyCommunityMember(tokenAddress) {
+        require(tokenQuantity > 0, "Quantity should be greater than 0");
         require(
-            communityInformation[tokenAddress].tokenAddress != address(0),
-            "The community isn't created yet!"
+            ABXtokenBal() >= tokenQuantity / 10,
+            "You don't have enough balance to buy community token."
         );
-
         token = ERC20Token(ABXADDR);
         isLocked = false;
         token.burn(msg.sender, tokenQuantity / 10); // EVERYONE CAN CALL THE MINT FUNCTION
@@ -288,11 +282,9 @@ contract CommunityFactory {
      * @param tokenAddress The address of the token.
      * @return The token balance of the user.
      */
-    function getCommTokenBal(address tokenAddress)
-        public
-        view
-        returns (uint256)
-    {
+    function getCommTokenBal(
+        address tokenAddress
+    ) public view returns (uint256) {
         ERC20Token tokenContract = ERC20Token(tokenAddress);
         return tokenContract.balanceOf(msg.sender);
     }
@@ -329,24 +321,24 @@ contract CommunityFactory {
         string memory description,
         address comAddr,
         bool isExclusive,
-        uint8 prdPrice
+        uint16 prdPrice
     ) external {
         require(
-            communityInformation[comAddr].tokenAddress == address(0),
-            "Community dosent exist"
+            communityInformation[comAddr].tokenAddress != address(0),
+            "The Community does not exist!!"
         );
         require(
             communityInformation[comAddr].creator == msg.sender,
-            "Only creator can publish Arts"
+            "Only community creator can publish product!!"
         );
         // Calculate the minimum required token balance
         // considering potential loss of precision due to division
-        uint256 min_token_balance = (prdPrice * 50) / 100;
+        uint16 min_token_balance = (prdPrice * 50) / 100;
 
         // Check if the token balance is sufficient
         require(
             getCommTokenBal(comAddr) >= min_token_balance,
-            "You don't have enough community token."
+            "You don't have enough community native token."
         );
 
         token = ERC20Token(comAddr);
@@ -447,7 +439,7 @@ contract CommunityFactory {
     function getCode(
         address comm,
         string memory name,
-        uint8 price
+        uint16 price
     ) internal view returns (bytes4) {
         bytes memory data = abi.encodePacked(
             comm,
@@ -465,6 +457,10 @@ contract CommunityFactory {
      * @param communityAddress The address of the community.
      */
     modifier onlyCommunityMember(address communityAddress) {
+        require(
+            communityInformation[communityAddress].tokenAddress != address(0),
+            "The Community does not exist!!"
+        );
         require(
             communityMemberships[msg.sender][communityAddress],
             "Not a member of the community"
