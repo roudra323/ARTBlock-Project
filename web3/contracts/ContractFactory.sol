@@ -4,6 +4,8 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+import "hardhat/console.sol";
+
 /**
  * @title ERC20Token
  * @dev Extends ERC20 and Ownable contracts to create a custom ERC20 token.
@@ -98,6 +100,7 @@ contract CommunityFactory {
         bool listedForVote;
         bool listedForSale;
         int256 voteWeight;
+        uint listedTime;
     }
 
     // Events
@@ -355,25 +358,28 @@ contract CommunityFactory {
             prdPrice,
             true,
             false,
-            0
+            0,
+            block.timestamp
         );
-
-        bytes4 code = getCode(comAddr, name, prdPrice);
         // listed for vote = True
         listedForVoting.push(tempPrd);
-        commListedProd[comAddr][code] = tempPrd; // created product
+        commListedProd[comAddr][getCode(comAddr, name, prdPrice)] = tempPrd; // created product
+
+        // Testing
+        console.log("Product is published for voting!!");
+        console.log("Product Name: %s", name);
     }
 
     function upVote(
         string memory name,
         address communiAddr,
         uint8 prdPrice
-    ) external onlyCommunityMember(communiAddr) {
+    )
+        external
+        onlyCommunityMember(communiAddr)
+        checkVotingRequirement(name, communiAddr, prdPrice)
+    {
         bytes4 code = getCode(communiAddr, name, prdPrice);
-        require(
-            !hasVoted[msg.sender][code],
-            "You have already voted for this product."
-        );
         uint256 tokenBalance = getCommTokenBal(msg.sender);
         commProdVote[code] += int256(tokenBalance);
         hasVoted[msg.sender][code] = true;
@@ -383,34 +389,44 @@ contract CommunityFactory {
         string memory name,
         address communiAddr,
         uint8 prdPrice
-    ) external onlyCommunityMember(communiAddr) {
+    )
+        external
+        onlyCommunityMember(communiAddr)
+        checkVotingRequirement(name, communiAddr, prdPrice)
+    {
         bytes4 code = getCode(communiAddr, name, prdPrice);
-        require(
-            !hasVoted[msg.sender][code],
-            "You have already voted for this product."
-        );
         uint256 tokenBalance = getCommTokenBal(msg.sender);
         commProdVote[code] -= int256(tokenBalance);
         hasVoted[msg.sender][code] = true;
     }
 
-    // Need an oracal to call this function every 24 hours
-    function voteResult(
+    function votingResult(
         string memory name,
         address communiAddr,
         uint8 prdPrice
-    ) external {
+    ) external onlyCommunityMember(communiAddr) {
+        require(
+            getCommunityInformation(communiAddr).creator == msg.sender,
+            "Only Community Creator can call this func!!"
+        );
         bytes4 code = getCode(communiAddr, name, prdPrice);
+        require(
+            commListedProd[communiAddr][code].listedTime + 172800 >
+                block.timestamp,
+            "Voting time is still remaning!!"
+        );
         if (commProdVote[code] >= 0) {
             commListedProd[communiAddr][code].listedForSale = true;
             commListedProd[communiAddr][code].voteWeight = commProdVote[code];
             listedForMarket.push(commListedProd[communiAddr][code]);
 
             token = ERC20Token(communiAddr);
-            // Stacking 50% of product price
+            // Returning 50% of product price
             isLocked = false;
             token.mint(msg.sender, (prdPrice * 50) / 100);
             isLocked = true;
+            // if downvotes are more than upvotes
+            // then cut 25% of product price and return 25% to the creator
         } else {
             isLocked = false;
             token.mint(msg.sender, (prdPrice * 25) / 100); // returning 25% of product price if not voted
@@ -450,6 +466,16 @@ contract CommunityFactory {
         return bytes4(keccak256(data));
     }
 
+    function getTime() public view returns (uint) {
+        return block.timestamp;
+    }
+
+    function getCommunityInformation(
+        address comm
+    ) public view returns (CommunityInfo memory) {
+        return communityInformation[comm];
+    }
+
     // Modifiers
 
     /**
@@ -464,6 +490,34 @@ contract CommunityFactory {
         require(
             communityMemberships[msg.sender][communityAddress],
             "Not a member of the community"
+        );
+        _;
+    }
+    /**
+     * @dev Modifier to check if the caller qualifies certain requirements to vote for a product.
+     * @param name The name of the product.
+     * @param communiAddr The address of the community.
+     * @param prdPrice The price of the product.
+     */
+    modifier checkVotingRequirement(
+        string memory name,
+        address communiAddr,
+        uint8 prdPrice
+    ) {
+        bytes4 code = getCode(communiAddr, name, prdPrice);
+        require(
+            commListedProd[communiAddr][code].listedForVote,
+            "Product dosen't exist!!"
+        );
+        // Check if the voting time is over (48 hours = 2 days)
+        require(
+            commListedProd[communiAddr][code].listedTime + 172800 >
+                block.timestamp,
+            "Voting time is over!!"
+        );
+        require(
+            !hasVoted[msg.sender][code],
+            "You have already voted for this product."
         );
         _;
     }

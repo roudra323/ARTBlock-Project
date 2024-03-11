@@ -306,7 +306,6 @@ describe("ContractFactory", function () {
           )
       ).to.be.revertedWith("The Community does not exist!!");
     });
-
     it("Should fail cause rather than community creator , other addresses will call", async function () {
       // This test case checks that a user cannot publish a product if they are not the creator of the community.
       const { contract, addr1, addr2, communityAddr } = await loadFixture(
@@ -314,9 +313,6 @@ describe("ContractFactory", function () {
       );
       // community information
       const community = await contract.communityInformation(communityAddr);
-      console.log(community.creator);
-      console.log(addr1.address);
-
       // join community
       await contract.connect(addr2).joinCommunity(communityAddr);
 
@@ -349,6 +345,20 @@ describe("ContractFactory", function () {
           .connect(addr1)
           .publishProduct("TP", "Test Product", communityAddr, true, 200)
       ).to.be.revertedWith("You don't have enough community native token.");
+    });
+    it("Should successfully stack the product for voting", async function () {
+      // This test case checks if the product is published or not.
+      const { contract, addr1, addr2, communityAddr } = await loadFixture(
+        createCommunityFixture
+      );
+      // buy Community Token
+      await contract.connect(addr1).buyCommToken(communityAddr, 300);
+      await contract
+        .connect(addr1)
+        .publishProduct("TP", "Test Product", communityAddr, true, 200);
+
+      const prodictInfo = await contract.getAllPendingPrd();
+      console.log(prodictInfo);
     });
 
     // it("", async function () {});
