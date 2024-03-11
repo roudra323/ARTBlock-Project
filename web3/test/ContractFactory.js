@@ -362,4 +362,41 @@ describe("ContractFactory", function () {
     // it("", async function () {});
     // it("", async function () {});
   });
+
+  describe("Vote Product", function () {
+    // This test suite is for testing the functionality of voting a product.
+    it("Should fail because Not a member of the community", async function () {
+      // This test case checks that a user cannot buy community tokens Not a member of the community.
+      const { contract, addr1, addr2, communityAddr } = await loadFixture(
+        createCommunityFixture
+      );
+      await expect(
+        contract.connect(addr2).downVote("Test", communityAddr, 200)
+      ).to.be.revertedWithCustomError(contract, "UnauthorizedAccess");
+    });
+    it("Should revert cause the product does not exist", async function () {
+      // This test case checks that a user cannot vote on a product that does not exist.
+      const { contract, addr1, addr2, communityAddr } = await loadFixture(
+        createCommunityFixture
+      );
+      await contract.connect(addr2).joinCommunity(communityAddr);
+      await expect(
+        contract.connect(addr2).upVote("Test", communityAddr, 200)
+      ).to.be.revertedWithCustomError(contract, "ProductNotFound");
+    });
+    it("Should fail cause voting time is over", async function () {
+      // This test case checks that a user cannot vote on a product if the voting time is over.
+      const { contract, addr1, addr2, communityAddr } = await loadFixture(
+        createCommunityFixture
+      );
+      await contract.connect(addr2).joinCommunity(communityAddr);
+      await contract
+        .connect(addr1)
+        .publishProduct("TP", "Test Product", communityAddr, true, 200);
+      await time.increase(604800);
+      await expect(
+        contract.connect(addr2).upVote("TP", communityAddr, 200)
+      ).to.be.revertedWithCustomError(contract, "VotingTimeError");
+    });
+  });
 });

@@ -327,7 +327,7 @@ contract CommunityFactory {
         uint16 min_token_balance = (prdPrice * 50) / 100;
 
         // Check if the token balance is sufficient
-        if (getCommTokenBal(comAddr) < min_token_balance) {
+        if (getCommTokenBal(msg.sender) < min_token_balance) {
             revert InsufficientBalance();
         }
 
