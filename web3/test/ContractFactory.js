@@ -65,7 +65,7 @@ describe("ContractFactory", function () {
         contract
           .connect(addr1)
           .buyABX(200, { value: ethers.parseUnits("100", "wei") })
-      ).to.be.revertedWith("Please select the specified amount of ether");
+      ).to.be.revertedWithCustomError(contract, "InvalidAmount");
     });
 
     it("Should fail if the creator wants to buy ABX Token", async function () {
@@ -78,7 +78,7 @@ describe("ContractFactory", function () {
         contract
           .connect(creator)
           .buyABX(200, { value: ethers.parseUnits("2000", "wei") })
-      ).to.be.revertedWith("Owner can't buy ABX from himself!!");
+      ).to.be.revertedWithCustomError(contract, "UnauthorizedAccess");
     });
 
     it("Should add wei to creator balance", async function () {
@@ -108,9 +108,7 @@ describe("ContractFactory", function () {
         contract
           .connect(addr2)
           .createCommunity("Test Community", "TST", "T", "TKT")
-      ).to.be.revertedWith(
-        "You don't have enough balance to create community."
-      );
+      ).to.be.revertedWithCustomError(contract, "InsufficientBalance");
     });
 
     it("Should successfully create a community", async function () {
@@ -202,7 +200,7 @@ describe("ContractFactory", function () {
       await contract.connect(addr2).joinCommunity(communityAddr);
       await expect(
         contract.connect(addr2).joinCommunity(communityAddr)
-      ).to.be.revertedWith("User is already a member of the community");
+      ).to.be.revertedWithCustomError(contract, "AlreadyMember");
     });
     it("Should fail because community does not exist", async function () {
       // This test case checks that a user cannot join a community that does not exist.
@@ -213,7 +211,7 @@ describe("ContractFactory", function () {
         contract
           .connect(addr1)
           .joinCommunity("0x0000000000000000000000000000000000000000")
-      ).to.be.revertedWith("Community does not exist");
+      ).to.be.revertedWithCustomError(contract, "CommunityNotFound");
     });
     it("Should emit event when joining a community", async function () {
       // This test case checks that the correct event is emitted when a user joins a community.
@@ -243,7 +241,7 @@ describe("ContractFactory", function () {
       );
       await expect(
         contract.connect(addr2).buyCommToken(communityAddr, 200)
-      ).to.be.revertedWith("Not a member of the community");
+      ).to.be.revertedWithCustomError(contract, "UnauthorizedAccess");
     });
     it("Should fail because community does not exist", async function () {
       // This test case checks that a user cannot buy community tokens if the community does not exist.
@@ -252,7 +250,7 @@ describe("ContractFactory", function () {
         contract
           .connect(addr1)
           .buyCommToken("0x0000000000000000000000000000000000000000", 200)
-      ).to.be.revertedWith("The Community does not exist!!");
+      ).to.be.revertedWithCustomError(contract, "CommunityNotFound");
     });
     it("Should fail because insufficient ABX token balance", async function () {
       // This test case checks that a user cannot buy community tokens if they do not have enough ABX tokens.
@@ -263,9 +261,7 @@ describe("ContractFactory", function () {
       await contract.connect(addr2).joinCommunity(communityAddr);
       await expect(
         contract.connect(addr2).buyCommToken(communityAddr, 200)
-      ).to.be.revertedWith(
-        "You don't have enough balance to buy community token."
-      );
+      ).to.be.revertedWithCustomError(contract, "InsufficientBalance");
     });
     it("Should successfully buy community token", async function () {
       // This test case verifies that a user can successfully buy community tokens if they have enough ABX tokens.
@@ -304,7 +300,7 @@ describe("ContractFactory", function () {
             true,
             200
           )
-      ).to.be.revertedWith("The Community does not exist!!");
+      ).to.be.revertedWithCustomError(contract, "CommunityNotFound");
     });
     it("Should fail cause rather than community creator , other addresses will call", async function () {
       // This test case checks that a user cannot publish a product if they are not the creator of the community.
@@ -320,7 +316,7 @@ describe("ContractFactory", function () {
         contract
           .connect(addr2)
           .publishProduct("TP", "Test Product", communityAddr, true, 200)
-      ).to.be.revertedWith("Only community creator can publish product!!");
+      ).to.be.revertedWithCustomError(contract, "UnauthorizedAccess");
     });
     it("Should be successful, community creator will call", async function () {
       // This test case checks that a creator can publish a product.
@@ -331,7 +327,7 @@ describe("ContractFactory", function () {
       await contract.connect(addr1).buyCommToken(communityAddr, 200);
       await contract
         .connect(addr1)
-        .publishProduct("TP", "Test Product", communityAddr, true, 200);
+        .publishProduct("CTP", "CTest Product", communityAddr, true, 200);
     });
     it("Should fail, native community token balance is insuffitient", async function () {
       // This test case checks if the creator has enough community native token to publish a product.
@@ -343,8 +339,8 @@ describe("ContractFactory", function () {
       await expect(
         contract
           .connect(addr1)
-          .publishProduct("TP", "Test Product", communityAddr, true, 200)
-      ).to.be.revertedWith("You don't have enough community native token.");
+          .publishProduct("XP", "X Product", communityAddr, true, 200)
+      ).to.be.revertedWithCustomError(contract, "InsufficientBalance");
     });
     it("Should successfully stack the product for voting", async function () {
       // This test case checks if the product is published or not.
@@ -358,7 +354,7 @@ describe("ContractFactory", function () {
         .publishProduct("TP", "Test Product", communityAddr, true, 200);
 
       const prodictInfo = await contract.getAllPendingPrd();
-      console.log(prodictInfo);
+      // console.log(prodictInfo);
     });
 
     // it("", async function () {});
