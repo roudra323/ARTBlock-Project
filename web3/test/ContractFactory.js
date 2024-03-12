@@ -422,5 +422,111 @@ describe("ContractFactory", function () {
         contract.connect(addr2).upVote("TP", communityAddr, 200)
       ).to.be.revertedWithCustomError(contract, "VotingTimeError");
     });
+
+    it("Should upvote successfuly", async function () {
+      // This test case checks that a user can upvote on a product.
+      const { contract, addr1, addr2, communityAddr } = await loadFixture(
+        createCommunityFixture
+      );
+      await contract.connect(addr2).joinCommunity(communityAddr);
+      await contract
+        .connect(addr2)
+        .buyABX(200, { value: ethers.parseUnits("2000", "wei") });
+      await contract.connect(addr2).buyCommToken(communityAddr, 200);
+
+      await contract.connect(addr1).buyCommToken(communityAddr, 300);
+      await contract
+        .connect(addr1)
+        .publishProduct("TP", "Test Product", communityAddr, true, 200);
+
+      // const mareketProdictInfo = await contract.getAllMktPrd();
+      // console.log("Market product info", mareketProdictInfo);
+
+      const productInfo = await contract.getCommProdInfo(
+        communityAddr,
+        "TP",
+        200
+      );
+      // console.log(productInfo);
+      // const productInfo = await contract.getCommProdInfo(
+      //   communityAddr,
+      //   "TP",
+      //   200
+      // );
+
+      // console.log("getCommProdInfo", productInfo);
+      // console.log("Product listed time", Number(productInfo.listedTime));
+      await time.increase(172600);
+      // console.log("get time after increase", await time.latest());
+      const code = await contract.getCode(communityAddr, "TP", 200);
+      await contract.connect(addr2).upVote("TP", communityAddr, 200);
+      const voteCount = await contract.commProdVote(code);
+      console.log("voteCount", voteCount);
+      expect(voteCount.toString()).to.equal("200");
+    });
+    it("Should downvote successfuly", async function () {
+      // This test case checks that a user can downvote on a product.
+      const { contract, addr1, addr2, communityAddr } = await loadFixture(
+        createCommunityFixture
+      );
+      await contract.connect(addr2).joinCommunity(communityAddr);
+      await contract
+        .connect(addr2)
+        .buyABX(200, { value: ethers.parseUnits("2000", "wei") });
+      await contract.connect(addr2).buyCommToken(communityAddr, 200);
+      await contract.connect(addr1).buyCommToken(communityAddr, 300);
+      await contract
+        .connect(addr1)
+        .publishProduct("TP", "Test Product", communityAddr, true, 200);
+      await time.increase(172600);
+      // console.log("get time after increase", await time.latest());
+      const code = await contract.getCode(communityAddr, "TP", 200);
+      await contract.connect(addr2).downVote("TP", communityAddr, 200);
+      const voteCount = await contract.commProdVote(code);
+      console.log("voteCount", voteCount);
+      expect(voteCount.toString()).to.equal("-200");
+    });
+
+    it("Should fail cause can't vote twice", async function () {
+      // This test case checks that a user can't vote twice.
+      const { contract, addr1, addr2, communityAddr } = await loadFixture(
+        createCommunityFixture
+      );
+      await contract.connect(addr2).joinCommunity(communityAddr);
+      await contract
+        .connect(addr2)
+        .buyABX(200, { value: ethers.parseUnits("2000", "wei") });
+      await contract.connect(addr2).buyCommToken(communityAddr, 200);
+      await contract.connect(addr1).buyCommToken(communityAddr, 300);
+      await contract
+        .connect(addr1)
+        .publishProduct("TP", "Test Product", communityAddr, true, 200);
+      await time.increase(172600);
+      // console.log("get time after increase", await time.latest());
+      const code = await contract.getCode(communityAddr, "TP", 200);
+      await contract.connect(addr2).downVote("TP", communityAddr, 200);
+      await expect(
+        contract.connect(addr2).upVote("TP", communityAddr, 200)
+      ).to.be.revertedWithCustomError(contract, "AlreadyVoted");
+    });
+
+    it("Should fail cause user has insufficient balance", async function () {
+      // This test case checks if a user has insuffitient balance.
+      const { contract, addr1, addr2, communityAddr } = await loadFixture(
+        createCommunityFixture
+      );
+      await contract.connect(addr2).joinCommunity(communityAddr);
+      await contract
+        .connect(addr2)
+        .buyABX(200, { value: ethers.parseUnits("2000", "wei") });
+      await contract.connect(addr1).buyCommToken(communityAddr, 300);
+      await contract
+        .connect(addr1)
+        .publishProduct("TP", "Test Product", communityAddr, true, 200);
+      await time.increase(172600);
+      await expect(
+        contract.connect(addr2).upVote("TP", communityAddr, 200)
+      ).to.be.revertedWithCustomError(contract, "InsufficientBalance");
+    });
   });
 });

@@ -367,8 +367,9 @@ contract CommunityFactory {
         checkVotingRequirement(name, communiAddr, prdPrice)
     {
         bytes4 code = getCode(communiAddr, name, prdPrice);
-        uint256 tokenBalance = getCommTokenBal(msg.sender);
+        uint256 tokenBalance = getCommTokenBal(communiAddr);
         commProdVote[code] += int256(tokenBalance);
+        // console.log("TOken Balance", tokenBalance);
         hasVoted[msg.sender][code] = true;
     }
 
@@ -382,7 +383,7 @@ contract CommunityFactory {
         checkVotingRequirement(name, communiAddr, prdPrice)
     {
         bytes4 code = getCode(communiAddr, name, prdPrice);
-        uint256 tokenBalance = getCommTokenBal(msg.sender);
+        uint256 tokenBalance = getCommTokenBal(communiAddr);
         commProdVote[code] -= int256(tokenBalance);
         hasVoted[msg.sender][code] = true;
     }
@@ -445,7 +446,7 @@ contract CommunityFactory {
         address comm,
         string memory name,
         uint16 price
-    ) internal pure returns (bytes4) {
+    ) public pure returns (bytes4) {
         bytes memory data = abi.encodePacked(comm, name, price);
         return bytes4(keccak256(data));
     }
@@ -501,6 +502,10 @@ contract CommunityFactory {
         // console.log(commListedProd[communiAddr][code]);
         if (commListedProd[communiAddr][code].listedForVote == false) {
             revert ProductNotFound();
+        }
+        // Check if the caller has enough Community tokens to vote
+        if (getCommTokenBal(communiAddr) < 1) {
+            revert InsufficientBalance();
         }
         // Check if the voting time is over (48 hours = 2 days = 172800 seconds)
         if (
