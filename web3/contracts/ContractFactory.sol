@@ -106,7 +106,7 @@ contract CommunityFactory {
         string pdDesc;
         address pdCommunity;
         bool isExclusive;
-        uint16 prdPrice;
+        uint256 prdPrice;
         bool listedForVote;
         bool listedForSale;
         int256 voteWeight;
@@ -312,7 +312,7 @@ contract CommunityFactory {
         string memory description,
         address comAddr,
         bool isExclusive,
-        uint16 prdPrice
+        uint256 prdPrice
     ) external {
         // check if the community exists
         if (communityInformation[comAddr].tokenAddress == address(0)) {
@@ -324,7 +324,7 @@ contract CommunityFactory {
         }
         // Calculate the minimum required token balance
         // considering potential loss of precision due to division
-        uint16 min_token_balance = (prdPrice * 50) / 100;
+        uint256 min_token_balance = (prdPrice / 100) * 50;
 
         // Check if the token balance is sufficient
         if (getCommTokenBal(comAddr) < min_token_balance) {
@@ -353,14 +353,14 @@ contract CommunityFactory {
         commListedProd[comAddr][getCode(comAddr, name, prdPrice)] = tempPrd; // created product
 
         // Testing
-        console.log("Product is published for voting!!");
-        console.log("Product Name: %s", name);
+        // console.log("Product is published for voting!!");
+        // console.log("Product Name: %s", name);
     }
 
     function upVote(
         string memory name,
         address communiAddr,
-        uint8 prdPrice
+        uint256 prdPrice
     )
         external
         onlyCommunityMember(communiAddr)
@@ -376,7 +376,7 @@ contract CommunityFactory {
     function downVote(
         string memory name,
         address communiAddr,
-        uint8 prdPrice
+        uint256 prdPrice
     )
         external
         onlyCommunityMember(communiAddr)
@@ -391,14 +391,23 @@ contract CommunityFactory {
     function votingResult(
         string memory name,
         address communiAddr,
-        uint8 prdPrice
-    ) external onlyCommunityMember(communiAddr) {
+        uint256 prdPrice
+    ) external {
+        bytes4 code = getCode(communiAddr, name, prdPrice);
+        // check if the product is listed for vote
+        if (commListedProd[communiAddr][code].listedForVote == false) {
+            revert ProductNotFound();
+        }
         // check if the caller is the creator of the community
         if (getCommunityInformation(communiAddr).creator != msg.sender) {
             revert UnauthorizedAccess();
         }
-        bytes4 code = getCode(communiAddr, name, prdPrice);
         // check if the voting time is still remaining
+        // console.log(
+        //     "Time: %s",
+        //     commListedProd[communiAddr][code].listedTime + 172800
+        // );
+        // console.log("Block Time: %s", block.timestamp);
         if (
             commListedProd[communiAddr][code].listedTime + 172800 >
             block.timestamp
@@ -413,13 +422,13 @@ contract CommunityFactory {
             token = ERC20Token(communiAddr);
             // Returning 50% of product price
             isLocked = false;
-            token.mint(msg.sender, (prdPrice * 50) / 100);
+            token.mint(msg.sender, (prdPrice / 100) * 50);
             isLocked = true;
             // if downvotes are more than upvotes
             // then cut 25% of product price and return 25% to the creator
         } else {
             isLocked = false;
-            token.mint(msg.sender, (prdPrice * 25) / 100); // returning 25% of product price if not voted
+            token.mint(msg.sender, (prdPrice / 100) * 25); // returning 25% of product price if not voted
             isLocked = true;
         }
     }
@@ -445,7 +454,7 @@ contract CommunityFactory {
     function getCode(
         address comm,
         string memory name,
-        uint16 price
+        uint256 price
     ) public pure returns (bytes4) {
         bytes memory data = abi.encodePacked(comm, name, price);
         return bytes4(keccak256(data));
@@ -495,7 +504,7 @@ contract CommunityFactory {
     modifier checkVotingRequirement(
         string memory name,
         address communiAddr,
-        uint8 prdPrice
+        uint256 prdPrice
     ) {
         bytes4 code = getCode(communiAddr, name, prdPrice);
         // Check if the product exists

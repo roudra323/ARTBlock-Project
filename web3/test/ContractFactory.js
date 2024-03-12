@@ -38,6 +38,30 @@ describe("ContractFactory", function () {
     return { contract, addr1, addr2, addr3, communityAddr };
   }
 
+  async function publishProductFixture() {
+    const { contract, addr1, addr2, addr3, communityAddr } = await loadFixture(
+      createCommunityFixture
+    );
+    // Join Community Address 2 and 3
+    await contract.connect(addr2).joinCommunity(communityAddr);
+    await contract.connect(addr3).joinCommunity(communityAddr);
+    // Buy Abx for Address 2 and 3
+    await contract
+      .connect(addr2)
+      .buyABX(200, { value: ethers.parseUnits("2000", "wei") });
+    await contract
+      .connect(addr3)
+      .buyABX(200, { value: ethers.parseUnits("2000", "wei") });
+
+    // Buy Community Token for Address 1
+    await contract.connect(addr1).buyCommToken(communityAddr, 300);
+    // Publish product for Address 1
+    await contract
+      .connect(addr1)
+      .publishProduct("TP", "Test Product", communityAddr, true, 200);
+    return { contract, addr1, addr2, addr3, communityAddr };
+  }
+
   describe("Buy ABX Token", function () {
     // This test suite is for testing the functionality of buying ABX tokens.
 
@@ -356,11 +380,6 @@ describe("ContractFactory", function () {
       const prodictInfo = await contract.getAllPendingPrd();
       // console.log(prodictInfo);
     });
-
-    // it("", async function () {});
-    // it("", async function () {});
-    // it("", async function () {});
-    // it("", async function () {});
   });
 
   describe("Vote Product", function () {
@@ -399,24 +418,11 @@ describe("ContractFactory", function () {
       await contract
         .connect(addr1)
         .publishProduct("TP", "Test Product", communityAddr, true, 200);
-
-      // const mareketProdictInfo = await contract.getAllMktPrd();
-      // console.log("Market product info", mareketProdictInfo);
-
-      // const productInfo = await contract.getCommProdInfo(
-      //   communityAddr,
-      //   "TP",
-      //   200
-      // );
-      // console.log(productInfo);
       const productInfo = await contract.getCommProdInfo(
         communityAddr,
         "TP",
         200
       );
-
-      console.log("getCommProdInfo", productInfo);
-
       await time.increase(Number(productInfo.listedTime) + 172900);
       await expect(
         contract.connect(addr2).upVote("TP", communityAddr, 200)
@@ -438,30 +444,17 @@ describe("ContractFactory", function () {
       await contract
         .connect(addr1)
         .publishProduct("TP", "Test Product", communityAddr, true, 200);
-
-      // const mareketProdictInfo = await contract.getAllMktPrd();
-      // console.log("Market product info", mareketProdictInfo);
-
       const productInfo = await contract.getCommProdInfo(
         communityAddr,
         "TP",
         200
       );
-      // console.log(productInfo);
-      // const productInfo = await contract.getCommProdInfo(
-      //   communityAddr,
-      //   "TP",
-      //   200
-      // );
-
-      // console.log("getCommProdInfo", productInfo);
-      // console.log("Product listed time", Number(productInfo.listedTime));
       await time.increase(172600);
       // console.log("get time after increase", await time.latest());
       const code = await contract.getCode(communityAddr, "TP", 200);
       await contract.connect(addr2).upVote("TP", communityAddr, 200);
       const voteCount = await contract.commProdVote(code);
-      console.log("voteCount", voteCount);
+      // console.log("voteCount", voteCount);
       expect(voteCount.toString()).to.equal("200");
     });
     it("Should downvote successfuly", async function () {
@@ -480,10 +473,10 @@ describe("ContractFactory", function () {
         .publishProduct("TP", "Test Product", communityAddr, true, 200);
       await time.increase(172600);
       // console.log("get time after increase", await time.latest());
-      const code = await contract.getCode(communityAddr, "TP", 200);
       await contract.connect(addr2).downVote("TP", communityAddr, 200);
+      const code = await contract.getCode(communityAddr, "TP", 200);
       const voteCount = await contract.commProdVote(code);
-      console.log("voteCount", voteCount);
+      // console.log("voteCount", voteCount);
       expect(voteCount.toString()).to.equal("-200");
     });
 
@@ -510,7 +503,7 @@ describe("ContractFactory", function () {
       ).to.be.revertedWithCustomError(contract, "AlreadyVoted");
     });
 
-    it("Should fail cause user has insufficient balance", async function () {
+    it("Should fail cause user has insufficient balance for vote", async function () {
       // This test case checks if a user has insuffitient balance.
       const { contract, addr1, addr2, communityAddr } = await loadFixture(
         createCommunityFixture
@@ -527,6 +520,180 @@ describe("ContractFactory", function () {
       await expect(
         contract.connect(addr2).upVote("TP", communityAddr, 200)
       ).to.be.revertedWithCustomError(contract, "InsufficientBalance");
+    });
+
+    it("Should combine the upvotes and downvotes", async function () {
+      // This test case checks if a user has insuffitient balance.
+      const { contract, addr1, addr2, addr3, communityAddr } =
+        await loadFixture(publishProductFixture);
+
+      await contract.connect(addr2).buyCommToken(communityAddr, 100);
+      await contract.connect(addr3).buyCommToken(communityAddr, 400);
+
+      // Time increasing
+      await time.increase(172600);
+      await contract.connect(addr2).upVote("TP", communityAddr, 200);
+      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+      const code = await contract.getCode(communityAddr, "TP", 200);
+      const voteCount = await contract.commProdVote(code);
+      // console.log("voteCount", voteCount);
+      expect(voteCount.toString()).to.equal("-300");
+    });
+  });
+  describe("Voting Result", function () {
+    // This test suite is for testing the functionality of voting result.
+    it("Should fail cause product does not exist", async function () {
+      // This test case checks that a user cannot vote on a product that does not exist.
+      const { contract, addr1, addr2, communityAddr } = await loadFixture(
+        createCommunityFixture
+      );
+      await expect(
+        contract.connect(addr1).votingResult("Test", communityAddr, 200)
+      ).to.be.revertedWithCustomError(contract, "ProductNotFound");
+    });
+    it("Should fail cause the caller is not the community owner", async function () {
+      // This test case checks that a user is not the community owner.
+      const { contract, addr1, addr2, addr3, communityAddr } =
+        await loadFixture(publishProductFixture);
+
+      await contract.connect(addr2).buyCommToken(communityAddr, 100);
+      await contract.connect(addr3).buyCommToken(communityAddr, 400);
+
+      // Time increasing
+      await time.increase(172600);
+      await contract.connect(addr2).upVote("TP", communityAddr, 200);
+      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+      // const code = await contract.getCode(communityAddr, "TP", 200);
+      // const productInfo = await contract.commListedProd(communityAddr, code);
+      await expect(
+        contract.connect(addr2).votingResult("TP", communityAddr, 200)
+      ).to.be.revertedWithCustomError(contract, "UnauthorizedAccess");
+    });
+
+    it("Should fail cause voting time is still reamining", async function () {
+      // This test case checks if the voting time is remaining.
+      const { contract, addr1, addr2, addr3, communityAddr } =
+        await loadFixture(publishProductFixture);
+
+      await contract.connect(addr2).buyCommToken(communityAddr, 100);
+      await contract.connect(addr3).buyCommToken(communityAddr, 400);
+
+      // Time increasing
+      // await time.increase(172600);
+      await contract.connect(addr2).upVote("TP", communityAddr, 200);
+      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+      // const code = await contract.getCode(communityAddr, "TP", 200);
+      // const productInfo = await contract.commListedProd(communityAddr, code);
+      await expect(
+        contract.connect(addr1).votingResult("TP", communityAddr, 200)
+      ).to.be.revertedWithCustomError(contract, "VotingTimeError");
+    });
+
+    it("Should list the product for sale", async function () {
+      // This test case checks if the product is listed for sale.
+      const { contract, addr1, addr2, addr3, communityAddr } =
+        await loadFixture(publishProductFixture);
+
+      await contract.connect(addr2).buyCommToken(communityAddr, 400);
+      await contract.connect(addr3).buyCommToken(communityAddr, 200);
+
+      // Time increasing
+      await time.increase(172400);
+      await contract.connect(addr2).upVote("TP", communityAddr, 200);
+      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+
+      // Increasing time for checkcing voting result
+      await time.increase(600);
+      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
+
+      const code = await contract.getCode(communityAddr, "TP", 200);
+      const productInfo = await contract.commListedProd(communityAddr, code);
+      // console.log("productInfo", productInfo);
+      expect(productInfo.listedForSale).to.equal(true);
+
+      // const allMktProd = await contract.getAllMktPrd();
+      // console.log("allMktProd", allMktProd);
+    });
+
+    it("Should return 50% the product price for successful listing", async function () {
+      // This test case checks if 50% is returned or not.
+      const { contract, addr1, addr2, addr3, communityAddr } =
+        await loadFixture(publishProductFixture);
+
+      await contract.connect(addr2).buyCommToken(communityAddr, 400);
+      await contract.connect(addr3).buyCommToken(communityAddr, 200);
+
+      // Time increasing
+      await time.increase(172400);
+      await contract.connect(addr2).upVote("TP", communityAddr, 200);
+      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+
+      const creatorNativeTokenBalBefore = await contract
+        .connect(addr1)
+        .getCommTokenBal(communityAddr);
+
+      // Increasing time for checkcing voting result
+      await time.increase(600);
+      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
+
+      const code = await contract.getCode(communityAddr, "TP", 200);
+      const productInfo = await contract.commListedProd(communityAddr, code);
+      // console.log("productInfo", productInfo);
+      expect(productInfo.listedForSale).to.equal(true);
+
+      //checking the native token balance of the creator
+      const creatorNativeTokenBalAfter = await contract
+        .connect(addr1)
+        .getCommTokenBal(communityAddr);
+
+      // console.log("creatorNativeTokenBalBefore", creatorNativeTokenBalBefore);
+      // console.log("creatorNativeTokenBalAfter", creatorNativeTokenBalAfter);
+      expect(creatorNativeTokenBalAfter).to.equal(
+        creatorNativeTokenBalBefore +
+          BigInt((Number(productInfo.prdPrice) * 50) / 100)
+      );
+      // const allMktProd = await contract.getAllMktPrd();
+      // console.log("allMktProd", allMktProd);
+    });
+
+    it("Should return 25% the product price for unsuccessful listing", async function () {
+      // This test case checks if 50% is returned or not.
+      const { contract, addr1, addr2, addr3, communityAddr } =
+        await loadFixture(publishProductFixture);
+
+      await contract.connect(addr2).buyCommToken(communityAddr, 100);
+      await contract.connect(addr3).buyCommToken(communityAddr, 200);
+
+      // Time increasing
+      await time.increase(172400);
+      await contract.connect(addr2).upVote("TP", communityAddr, 200);
+      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+
+      const creatorNativeTokenBalBefore = await contract
+        .connect(addr1)
+        .getCommTokenBal(communityAddr);
+
+      // Increasing time for checkcing voting result
+      await time.increase(600);
+      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
+
+      const code = await contract.getCode(communityAddr, "TP", 200);
+      const productInfo = await contract.commListedProd(communityAddr, code);
+      // console.log("productInfo", productInfo);
+      expect(productInfo.listedForSale).to.equal(false);
+
+      //checking the native token balance of the creator
+      const creatorNativeTokenBalAfter = await contract
+        .connect(addr1)
+        .getCommTokenBal(communityAddr);
+
+      // console.log("creatorNativeTokenBalBefore", creatorNativeTokenBalBefore);
+      // console.log("creatorNativeTokenBalAfter", creatorNativeTokenBalAfter);
+
+      expect(creatorNativeTokenBalAfter).to.equal(
+        creatorNativeTokenBalBefore +
+          BigInt((Number(productInfo.prdPrice) * 25) / 100)
+      );
     });
   });
 });
