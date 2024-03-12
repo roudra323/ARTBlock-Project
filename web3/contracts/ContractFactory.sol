@@ -85,9 +85,9 @@ contract CommunityFactory {
     mapping(address => CommunityInfo) public communityInformation;
     // mapping(address => TokenInfo) public tokenInformation;
     mapping(address => mapping(address => bool)) public communityMemberships;
-    mapping(address => mapping(bytes4 => ProductInfo)) commListedProd;
+    mapping(address => mapping(bytes4 => ProductInfo)) public commListedProd;
     mapping(address => mapping(bytes4 => ProductInfo)) commApprovedProd;
-    mapping(bytes4 => int256) commProdVote;
+    mapping(bytes4 => int256) public commProdVote;
     mapping(bytes4 => ProductInfo) commProdInfo;
     mapping(address => mapping(bytes4 => bool)) hasVoted;
 
@@ -327,7 +327,7 @@ contract CommunityFactory {
         uint16 min_token_balance = (prdPrice * 50) / 100;
 
         // Check if the token balance is sufficient
-        if (getCommTokenBal(msg.sender) < min_token_balance) {
+        if (getCommTokenBal(comAddr) < min_token_balance) {
             revert InsufficientBalance();
         }
 
@@ -353,8 +353,8 @@ contract CommunityFactory {
         commListedProd[comAddr][getCode(comAddr, name, prdPrice)] = tempPrd; // created product
 
         // Testing
-        // console.log("Product is published for voting!!");
-        // console.log("Product Name: %s", name);
+        console.log("Product is published for voting!!");
+        console.log("Product Name: %s", name);
     }
 
     function upVote(
@@ -445,13 +445,8 @@ contract CommunityFactory {
         address comm,
         string memory name,
         uint16 price
-    ) internal view returns (bytes4) {
-        bytes memory data = abi.encodePacked(
-            comm,
-            name,
-            price,
-            block.timestamp
-        );
+    ) internal pure returns (bytes4) {
+        bytes memory data = abi.encodePacked(comm, name, price);
         return bytes4(keccak256(data));
     }
 
@@ -463,6 +458,14 @@ contract CommunityFactory {
         address comm
     ) public view returns (CommunityInfo memory) {
         return communityInformation[comm];
+    }
+
+    function getCommProdInfo(
+        address comm,
+        string memory name,
+        uint16 price
+    ) public view returns (ProductInfo memory) {
+        return commListedProd[comm][getCode(comm, name, price)];
     }
 
     // Modifiers
@@ -495,7 +498,8 @@ contract CommunityFactory {
     ) {
         bytes4 code = getCode(communiAddr, name, prdPrice);
         // Check if the product exists
-        if (!commListedProd[communiAddr][code].listedForVote) {
+        // console.log(commListedProd[communiAddr][code]);
+        if (commListedProd[communiAddr][code].listedForVote == false) {
             revert ProductNotFound();
         }
         // Check if the voting time is over (48 hours = 2 days = 172800 seconds)

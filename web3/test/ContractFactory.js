@@ -390,10 +390,34 @@ describe("ContractFactory", function () {
         createCommunityFixture
       );
       await contract.connect(addr2).joinCommunity(communityAddr);
+      await contract.connect(addr1).buyCommToken(communityAddr, 300);
+      await contract
+        .connect(addr2)
+        .buyABX(2000, { value: ethers.parseUnits("20000", "wei") });
+      await contract.connect(addr2).buyCommToken(communityAddr, 200);
+
       await contract
         .connect(addr1)
         .publishProduct("TP", "Test Product", communityAddr, true, 200);
-      await time.increase(604800);
+
+      // const mareketProdictInfo = await contract.getAllMktPrd();
+      // console.log("Market product info", mareketProdictInfo);
+
+      // const productInfo = await contract.getCommProdInfo(
+      //   communityAddr,
+      //   "TP",
+      //   200
+      // );
+      // console.log(productInfo);
+      const productInfo = await contract.getCommProdInfo(
+        communityAddr,
+        "TP",
+        200
+      );
+
+      console.log("getCommProdInfo", productInfo);
+
+      await time.increase(Number(productInfo.listedTime) + 172900);
       await expect(
         contract.connect(addr2).upVote("TP", communityAddr, 200)
       ).to.be.revertedWithCustomError(contract, "VotingTimeError");
