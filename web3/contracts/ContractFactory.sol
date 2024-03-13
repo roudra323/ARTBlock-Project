@@ -6,6 +6,17 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 import "hardhat/console.sol";
 
+error CommunityNotFound();
+error UnauthorizedAccess();
+error InsufficientBalance();
+error ProductNotFound();
+error Locked();
+error TransferFailed();
+error InvalidAmount();
+error AlreadyMember();
+error VotingTimeError();
+error AlreadyVoted();
+
 /**
  * @title ERC20Token
  * @dev Extends ERC20 and Ownable contracts to create a custom ERC20 token.
@@ -57,7 +68,9 @@ contract ERC20Token is ERC20, Ownable {
      */
     modifier lockedCheck() {
         CommunityFactory mContract = CommunityFactory(mainContract);
-        require(!mContract.lockedStatus(), "Community is locked");
+        if (mContract.lockedStatus()) {
+            revert Locked();
+        }
         _;
     }
 }
@@ -69,26 +82,21 @@ contract ERC20Token is ERC20, Ownable {
 contract CommunityFactory {
     // Mappings
     mapping(address => CommunityInfo) public communityInformation;
-    mapping(address => TokenInfo) public tokenInformation;
     mapping(address => mapping(address => bool)) public communityMemberships;
-    mapping(address => mapping(bytes4 => ProductInfo)) commListedProd;
+    mapping(address => mapping(bytes4 => ProductInfo)) public commListedProd;
     mapping(address => mapping(bytes4 => ProductInfo)) commApprovedProd;
-    mapping(bytes4 => int256) commProdVote;
+    mapping(bytes4 => int256) public commProdVote;
     mapping(bytes4 => ProductInfo) commProdInfo;
     mapping(address => mapping(bytes4 => bool)) hasVoted;
 
     // Structs
     struct CommunityInfo {
         string name;
+        string tkName;
+        string tkSymbol;
         string description;
         address creator;
         address tokenAddress;
-    }
-
-    struct TokenInfo {
-        string name;
-        string symbol;
-        address creator;
     }
 
     struct ProductInfo {
@@ -96,7 +104,7 @@ contract CommunityFactory {
         string pdDesc;
         address pdCommunity;
         bool isExclusive;
-        uint16 prdPrice;
+        uint256 prdPrice;
         bool listedForVote;
         bool listedForSale;
         int256 voteWeight;
@@ -117,21 +125,18 @@ contract CommunityFactory {
     event JoinedCommunity(address indexed member, address indexed community);
 
     // State variables
-    address private ABXADDR;
+    address private immutable ABXADDR;
     ERC20Token public token;
     address[] listedCommunities;
     ProductInfo[] listedForVoting;
     ProductInfo[] listedForMarket;
     bool public isLocked = true;
+    address public immutable contractOwner;
 
     // Constructor
     constructor() {
+        contractOwner = msg.sender;
         ERC20Token newToken = new ERC20Token("ABX TOKEN", "ABX", msg.sender);
-        tokenInformation[address(newToken)] = TokenInfo({
-            name: "ABX TOKEN",
-            symbol: "ABX",
-            creator: msg.sender
-        });
         ABXADDR = address(newToken);
     }
 
@@ -150,45 +155,25 @@ contract CommunityFactory {
      * @param _avxquantity The quantity of ABX to purchase.
      */
     function buyABX(uint256 _avxquantity) external payable {
-        require(msg.sender != address(0), "User is not valid");
-        require(
-            msg.sender != tokenInformation[ABXADDR].creator,
-            "Owner can't buy ABX from himself!!"
-        );
+        // check if the caller is the contract owner
+        if (msg.sender == contractOwner || msg.sender == address(0)) {
+            revert UnauthorizedAccess();
+        }
         uint256 etherQuan = 10 wei * _avxquantity;
-        require(
-            etherQuan == msg.value,
-            "Please select the specified amount of ether"
-        );
-        (bool success, ) = tokenInformation[ABXADDR].creator.call{
-            value: msg.value
-        }("");
-        require(success, "The transfer is not successful");
+        // check if the user has sent the specified amount of ether to buy the ABX token
+        if (etherQuan != msg.value) {
+            revert InvalidAmount();
+        }
+        (bool success, ) = contractOwner.call{value: msg.value}("");
+        // check if the transfer of ABX is successful
+        if (!success) {
+            revert TransferFailed();
+        }
+
         token = ERC20Token(ABXADDR);
         isLocked = false;
-        token.mint(msg.sender, _avxquantity); // EVERYONE CAN CALL THE MINT FUNCTION
+        token.mint(msg.sender, _avxquantity);
         isLocked = true;
-    }
-
-    /**
-     * @dev Creates a new ERC20 token internally.
-     * @param tokenName The name of the new token.
-     * @param tokenSymbol The symbol of the new token.
-     * @param creator The address of the token creator.
-     * @return An ERC20Token contract representing the newly created token.
-     */
-    function createToken(
-        string memory tokenName,
-        string memory tokenSymbol,
-        address creator
-    ) internal returns (ERC20Token) {
-        ERC20Token newToken = new ERC20Token(tokenName, tokenSymbol, creator);
-        tokenInformation[address(newToken)] = TokenInfo({
-            name: tokenName,
-            symbol: tokenSymbol,
-            creator: creator
-        });
-        return newToken;
     }
 
     /**
@@ -204,16 +189,15 @@ contract CommunityFactory {
         string memory tokenName,
         string memory tokenSymbol
     ) external payable {
-        require(
-            ABXtokenBal() >= 100,
-            "You don't have enough balance to create community."
-        );
-
+        // check if the user has minumum 100 ABX token to create the community
+        if (ABXtokenBal() < 100) {
+            revert InsufficientBalance();
+        }
         token = ERC20Token(ABXADDR);
         isLocked = false;
-        token.burn(msg.sender, 100); // EVERYONE CAN CALL THE BURN FUNCTION
+        token.burn(msg.sender, 100);
         isLocked = true;
-        ERC20Token communityToken = createToken(
+        ERC20Token communityToken = new ERC20Token(
             tokenName,
             tokenSymbol,
             msg.sender
@@ -223,19 +207,18 @@ contract CommunityFactory {
             name: communityName,
             description: communityDescription,
             creator: msg.sender,
-            tokenAddress: address(communityToken)
+            tokenAddress: address(communityToken),
+            tkName: tokenName,
+            tkSymbol: tokenSymbol
         });
-
         listedCommunities.push(address(communityToken));
         communityMemberships[msg.sender][address(communityToken)] = true;
-
-        emit JoinedCommunity(msg.sender, address(communityToken));
-
         emit CommunityCreated(
             address(communityToken),
             communityName,
             communityDescription
         );
+        emit JoinedCommunity(msg.sender, address(communityToken));
     }
 
     /**
@@ -243,14 +226,14 @@ contract CommunityFactory {
      * @param communityAddress The address of the community to join.
      */
     function joinCommunity(address communityAddress) external {
-        require(
-            communityInformation[communityAddress].creator != address(0),
-            "Community does not exist"
-        );
-        require(
-            !communityMemberships[msg.sender][communityAddress],
-            "User is already a member of the community"
-        );
+        // check if the community exists
+        if (communityInformation[communityAddress].creator == address(0)) {
+            revert CommunityNotFound();
+        }
+        // check if the user is already a member of the community
+        if (communityMemberships[msg.sender][communityAddress] == true) {
+            revert AlreadyMember();
+        }
         communityMemberships[msg.sender][communityAddress] = true;
         emit JoinedCommunity(msg.sender, communityAddress);
     }
@@ -258,17 +241,20 @@ contract CommunityFactory {
     /**
      * @dev Allows users to buy native tokens of the community.
      * @param tokenAddress The address of the community's ERC20 token.
-     * @param tokenQuantity The quantity of tokens to purchase.
+     * @param tokenQuantity The quantity of tokens to purchase. Minimum token 10
      */
     function buyCommToken(
         address tokenAddress,
         uint256 tokenQuantity
     ) public payable onlyCommunityMember(tokenAddress) {
-        require(tokenQuantity > 0, "Quantity should be greater than 0");
-        require(
-            ABXtokenBal() >= tokenQuantity / 10,
-            "You don't have enough balance to buy community token."
-        );
+        // check if the Native token quantity is minimum 10
+        if (tokenQuantity < 10) {
+            revert InvalidAmount();
+        }
+        // check if the user has enough ABX token to buy the community token
+        if (ABXtokenBal() < tokenQuantity / 10) {
+            revert InsufficientBalance();
+        }
         token = ERC20Token(ABXADDR);
         isLocked = false;
         token.burn(msg.sender, tokenQuantity / 10); // EVERYONE CAN CALL THE MINT FUNCTION
@@ -324,25 +310,24 @@ contract CommunityFactory {
         string memory description,
         address comAddr,
         bool isExclusive,
-        uint16 prdPrice
+        uint256 prdPrice
     ) external {
-        require(
-            communityInformation[comAddr].tokenAddress != address(0),
-            "The Community does not exist!!"
-        );
-        require(
-            communityInformation[comAddr].creator == msg.sender,
-            "Only community creator can publish product!!"
-        );
+        // check if the community exists
+        if (communityInformation[comAddr].tokenAddress == address(0)) {
+            revert CommunityNotFound();
+        }
+        // check if the caller is the creator of the community
+        if (communityInformation[comAddr].creator != msg.sender) {
+            revert UnauthorizedAccess();
+        }
         // Calculate the minimum required token balance
         // considering potential loss of precision due to division
-        uint16 min_token_balance = (prdPrice * 50) / 100;
+        uint256 min_token_balance = (prdPrice / 100) * 50;
 
         // Check if the token balance is sufficient
-        require(
-            getCommTokenBal(comAddr) >= min_token_balance,
-            "You don't have enough community native token."
-        );
+        if (getCommTokenBal(comAddr) < min_token_balance) {
+            revert InsufficientBalance();
+        }
 
         token = ERC20Token(comAddr);
         // Stacking 50% of product price
@@ -364,116 +349,161 @@ contract CommunityFactory {
         // listed for vote = True
         listedForVoting.push(tempPrd);
         commListedProd[comAddr][getCode(comAddr, name, prdPrice)] = tempPrd; // created product
-
-        // Testing
-        console.log("Product is published for voting!!");
-        console.log("Product Name: %s", name);
     }
 
+    /**
+     * @dev Allows a community member to upvote a product.
+     * @param name The name of the product.
+     * @param communiAddr The address of the community.
+     * @param prdPrice The price of the product.
+     */
     function upVote(
         string memory name,
         address communiAddr,
-        uint8 prdPrice
+        uint256 prdPrice
     )
         external
         onlyCommunityMember(communiAddr)
         checkVotingRequirement(name, communiAddr, prdPrice)
     {
         bytes4 code = getCode(communiAddr, name, prdPrice);
-        uint256 tokenBalance = getCommTokenBal(msg.sender);
+        uint256 tokenBalance = getCommTokenBal(communiAddr);
         commProdVote[code] += int256(tokenBalance);
         hasVoted[msg.sender][code] = true;
     }
 
+    /**
+     * @dev Allows a community member to downvote a product.
+     * @param name The name of the product.
+     * @param communiAddr The address of the community.
+     * @param prdPrice The price of the product.
+     */
     function downVote(
         string memory name,
         address communiAddr,
-        uint8 prdPrice
+        uint256 prdPrice
     )
         external
         onlyCommunityMember(communiAddr)
         checkVotingRequirement(name, communiAddr, prdPrice)
     {
         bytes4 code = getCode(communiAddr, name, prdPrice);
-        uint256 tokenBalance = getCommTokenBal(msg.sender);
+        uint256 tokenBalance = getCommTokenBal(communiAddr);
         commProdVote[code] -= int256(tokenBalance);
         hasVoted[msg.sender][code] = true;
     }
 
+    /**
+     * @dev Retrieves the voting result for a product and handles the necessary actions.
+     * @param name The name of the product.
+     * @param communiAddr The address of the community.
+     * @param prdPrice The price of the product.
+     */
     function votingResult(
         string memory name,
         address communiAddr,
-        uint8 prdPrice
-    ) external onlyCommunityMember(communiAddr) {
-        require(
-            getCommunityInformation(communiAddr).creator == msg.sender,
-            "Only Community Creator can call this func!!"
-        );
+        uint256 prdPrice
+    ) external {
         bytes4 code = getCode(communiAddr, name, prdPrice);
-        require(
+        // check if the product is listed for vote
+        if (commListedProd[communiAddr][code].listedForVote == false) {
+            revert ProductNotFound();
+        }
+        // check if the caller is the creator of the community
+        if (getCommunityInformation(communiAddr).creator != msg.sender) {
+            revert UnauthorizedAccess();
+        }
+        // check if the voting time is still remaining
+        if (
             commListedProd[communiAddr][code].listedTime + 172800 >
-                block.timestamp,
-            "Voting time is still remaning!!"
-        );
+            block.timestamp
+        ) {
+            revert VotingTimeError();
+        }
         if (commProdVote[code] >= 0) {
             commListedProd[communiAddr][code].listedForSale = true;
             commListedProd[communiAddr][code].voteWeight = commProdVote[code];
             listedForMarket.push(commListedProd[communiAddr][code]);
-
             token = ERC20Token(communiAddr);
             // Returning 50% of product price
             isLocked = false;
-            token.mint(msg.sender, (prdPrice * 50) / 100);
+            token.mint(msg.sender, (prdPrice / 100) * 50);
             isLocked = true;
             // if downvotes are more than upvotes
             // then cut 25% of product price and return 25% to the creator
         } else {
             isLocked = false;
-            token.mint(msg.sender, (prdPrice * 25) / 100); // returning 25% of product price if not voted
+            token.mint(msg.sender, (prdPrice / 100) * 25); // returning 25% of product price if not voted
             isLocked = true;
         }
     }
 
     /**
-
-
-    */
+     * @dev Retrieves all the products that are currently listed for voting.
+     * @return An array of ProductInfo structs representing the listed products.
+     */
     function getAllPendingPrd() external view returns (ProductInfo[] memory) {
         return listedForVoting;
     }
 
     /**
-
-
-    */
+     * @dev Retrieves all the products that are currently listed for sale in the market.
+     * @return An array of ProductInfo structs representing the listed products.
+     */
     function getAllMktPrd() external view returns (ProductInfo[] memory) {
         return listedForMarket;
     }
 
     // Internal functions
 
+    /**
+     * @dev Generates a unique code for a product based on the community address, product name, and price.
+     * @param comm The address of the community.
+     * @param name The name of the product.
+     * @param price The price of the product.
+     * @return A bytes4 value representing the unique code for the product.
+     */
     function getCode(
         address comm,
         string memory name,
-        uint16 price
-    ) internal view returns (bytes4) {
-        bytes memory data = abi.encodePacked(
-            comm,
-            name,
-            price,
-            block.timestamp
-        );
+        uint256 price
+    ) public pure returns (bytes4) {
+        bytes memory data = abi.encodePacked(comm, name, price);
         return bytes4(keccak256(data));
     }
 
+    /**
+     * @dev Retrieves the current timestamp.
+     * @return The current timestamp as a uint value.
+     */
     function getTime() public view returns (uint) {
         return block.timestamp;
     }
 
+    /**
+     * @dev Retrieves the information about a specific community.
+     * @param comm The address of the community.
+     * @return A CommunityInfo struct containing the community information.
+     */
     function getCommunityInformation(
         address comm
     ) public view returns (CommunityInfo memory) {
         return communityInformation[comm];
+    }
+
+    /**
+     * @dev Retrieves the information about a specific product listed in a community.
+     * @param comm The address of the community.
+     * @param name The name of the product.
+     * @param price The price of the product.
+     * @return A ProductInfo struct containing the product information.
+     */
+    function getCommProdInfo(
+        address comm,
+        string memory name,
+        uint16 price
+    ) public view returns (ProductInfo memory) {
+        return commListedProd[comm][getCode(comm, name, price)];
     }
 
     // Modifiers
@@ -483,16 +513,17 @@ contract CommunityFactory {
      * @param communityAddress The address of the community.
      */
     modifier onlyCommunityMember(address communityAddress) {
-        require(
-            communityInformation[communityAddress].tokenAddress != address(0),
-            "The Community does not exist!!"
-        );
-        require(
-            communityMemberships[msg.sender][communityAddress],
-            "Not a member of the community"
-        );
+        // Check if the community exists
+        if (communityInformation[communityAddress].tokenAddress == address(0)) {
+            revert CommunityNotFound();
+        }
+        // Check if the caller is a member of the community
+        if (!communityMemberships[msg.sender][communityAddress]) {
+            revert UnauthorizedAccess();
+        }
         _;
     }
+
     /**
      * @dev Modifier to check if the caller qualifies certain requirements to vote for a product.
      * @param name The name of the product.
@@ -502,23 +533,28 @@ contract CommunityFactory {
     modifier checkVotingRequirement(
         string memory name,
         address communiAddr,
-        uint8 prdPrice
+        uint256 prdPrice
     ) {
         bytes4 code = getCode(communiAddr, name, prdPrice);
-        require(
-            commListedProd[communiAddr][code].listedForVote,
-            "Product dosen't exist!!"
-        );
-        // Check if the voting time is over (48 hours = 2 days)
-        require(
-            commListedProd[communiAddr][code].listedTime + 172800 >
-                block.timestamp,
-            "Voting time is over!!"
-        );
-        require(
-            !hasVoted[msg.sender][code],
-            "You have already voted for this product."
-        );
+        // Check if the product exists
+        if (commListedProd[communiAddr][code].listedForVote == false) {
+            revert ProductNotFound();
+        }
+        // Check if the caller has enough Community tokens to vote
+        if (getCommTokenBal(communiAddr) < 1) {
+            revert InsufficientBalance();
+        }
+        // Check if the voting time is over (48 hours = 2 days = 172800 seconds)
+        if (
+            commListedProd[communiAddr][code].listedTime + 172800 <
+            block.timestamp
+        ) {
+            revert VotingTimeError();
+        }
+        // Check if the caller has already voted
+        if (hasVoted[msg.sender][code]) {
+            revert AlreadyVoted();
+        }
         _;
     }
 }
