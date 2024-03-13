@@ -71,7 +71,6 @@ contract ERC20Token is ERC20, Ownable {
         if (mContract.lockedStatus()) {
             revert Locked();
         }
-        // require(!mContract.lockedStatus(), "Community is locked");
         _;
     }
 }
@@ -83,7 +82,6 @@ contract ERC20Token is ERC20, Ownable {
 contract CommunityFactory {
     // Mappings
     mapping(address => CommunityInfo) public communityInformation;
-    // mapping(address => TokenInfo) public tokenInformation;
     mapping(address => mapping(address => bool)) public communityMemberships;
     mapping(address => mapping(bytes4 => ProductInfo)) public commListedProd;
     mapping(address => mapping(bytes4 => ProductInfo)) commApprovedProd;
@@ -351,12 +349,14 @@ contract CommunityFactory {
         // listed for vote = True
         listedForVoting.push(tempPrd);
         commListedProd[comAddr][getCode(comAddr, name, prdPrice)] = tempPrd; // created product
-
-        // Testing
-        // console.log("Product is published for voting!!");
-        // console.log("Product Name: %s", name);
     }
 
+    /**
+     * @dev Allows a community member to upvote a product.
+     * @param name The name of the product.
+     * @param communiAddr The address of the community.
+     * @param prdPrice The price of the product.
+     */
     function upVote(
         string memory name,
         address communiAddr,
@@ -369,10 +369,15 @@ contract CommunityFactory {
         bytes4 code = getCode(communiAddr, name, prdPrice);
         uint256 tokenBalance = getCommTokenBal(communiAddr);
         commProdVote[code] += int256(tokenBalance);
-        // console.log("TOken Balance", tokenBalance);
         hasVoted[msg.sender][code] = true;
     }
 
+    /**
+     * @dev Allows a community member to downvote a product.
+     * @param name The name of the product.
+     * @param communiAddr The address of the community.
+     * @param prdPrice The price of the product.
+     */
     function downVote(
         string memory name,
         address communiAddr,
@@ -388,6 +393,12 @@ contract CommunityFactory {
         hasVoted[msg.sender][code] = true;
     }
 
+    /**
+     * @dev Retrieves the voting result for a product and handles the necessary actions.
+     * @param name The name of the product.
+     * @param communiAddr The address of the community.
+     * @param prdPrice The price of the product.
+     */
     function votingResult(
         string memory name,
         address communiAddr,
@@ -403,11 +414,6 @@ contract CommunityFactory {
             revert UnauthorizedAccess();
         }
         // check if the voting time is still remaining
-        // console.log(
-        //     "Time: %s",
-        //     commListedProd[communiAddr][code].listedTime + 172800
-        // );
-        // console.log("Block Time: %s", block.timestamp);
         if (
             commListedProd[communiAddr][code].listedTime + 172800 >
             block.timestamp
@@ -418,7 +424,6 @@ contract CommunityFactory {
             commListedProd[communiAddr][code].listedForSale = true;
             commListedProd[communiAddr][code].voteWeight = commProdVote[code];
             listedForMarket.push(commListedProd[communiAddr][code]);
-
             token = ERC20Token(communiAddr);
             // Returning 50% of product price
             isLocked = false;
@@ -434,23 +439,30 @@ contract CommunityFactory {
     }
 
     /**
-
-
-    */
+     * @dev Retrieves all the products that are currently listed for voting.
+     * @return An array of ProductInfo structs representing the listed products.
+     */
     function getAllPendingPrd() external view returns (ProductInfo[] memory) {
         return listedForVoting;
     }
 
     /**
-
-
-    */
+     * @dev Retrieves all the products that are currently listed for sale in the market.
+     * @return An array of ProductInfo structs representing the listed products.
+     */
     function getAllMktPrd() external view returns (ProductInfo[] memory) {
         return listedForMarket;
     }
 
     // Internal functions
 
+    /**
+     * @dev Generates a unique code for a product based on the community address, product name, and price.
+     * @param comm The address of the community.
+     * @param name The name of the product.
+     * @param price The price of the product.
+     * @return A bytes4 value representing the unique code for the product.
+     */
     function getCode(
         address comm,
         string memory name,
@@ -460,16 +472,32 @@ contract CommunityFactory {
         return bytes4(keccak256(data));
     }
 
+    /**
+     * @dev Retrieves the current timestamp.
+     * @return The current timestamp as a uint value.
+     */
     function getTime() public view returns (uint) {
         return block.timestamp;
     }
 
+    /**
+     * @dev Retrieves the information about a specific community.
+     * @param comm The address of the community.
+     * @return A CommunityInfo struct containing the community information.
+     */
     function getCommunityInformation(
         address comm
     ) public view returns (CommunityInfo memory) {
         return communityInformation[comm];
     }
 
+    /**
+     * @dev Retrieves the information about a specific product listed in a community.
+     * @param comm The address of the community.
+     * @param name The name of the product.
+     * @param price The price of the product.
+     * @return A ProductInfo struct containing the product information.
+     */
     function getCommProdInfo(
         address comm,
         string memory name,
@@ -495,6 +523,7 @@ contract CommunityFactory {
         }
         _;
     }
+
     /**
      * @dev Modifier to check if the caller qualifies certain requirements to vote for a product.
      * @param name The name of the product.
@@ -508,7 +537,6 @@ contract CommunityFactory {
     ) {
         bytes4 code = getCode(communiAddr, name, prdPrice);
         // Check if the product exists
-        // console.log(commListedProd[communiAddr][code]);
         if (commListedProd[communiAddr][code].listedForVote == false) {
             revert ProductNotFound();
         }
