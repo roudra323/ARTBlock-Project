@@ -9,25 +9,45 @@ describe("ContractFactory", function () {
   // We define a fixture to reuse the same setup in every test.
   async function deployCommunityFactoryFixture() {
     const [creator, addr1, addr2, addr3, addr4] = await ethers.getSigners();
-    const Contract = await ethers.deployContract("CommunityFactory");
-    const contract = await Contract.waitForDeployment();
-    return { contract, creator, addr1, addr2, addr3, addr4 };
+    // const { nftContract } = await loadFixture(deployNFTFactoryFixture);
+    // const Contract = await ethers.deployContract("CommunityFactory");
+    // const contract = await Contract.waitForDeployment();
+    // Deploying the NFT contract
+    const NFTcontract = await ethers.getContractFactory("NFTfactory");
+    const nftcontract = await NFTcontract.deploy();
+    // Deploying the Community Factory contract
+    const Contract = await ethers.getContractFactory("CommunityFactory");
+    const contract = await Contract.deploy(nftcontract);
+    console.log("Contract Factory address -> ", contract.address);
+    console.log("NFT Factory address -> ", nftcontract.address);
+    return { contract, creator, addr1, addr2, addr3, addr4, nftcontract };
   }
+
+  // // We define a fixture to reuse the same setup in every test.
+  // async function deployNFTFactoryFixture() {
+  //   const [creator, addr1, addr2, addr3, addr4] = await ethers.getSigners();
+  //   const nftContract = await ethers.deployContract("NFTfactory");
+  //   console.log(nftContract.address);
+  //   // const nftcontract = await nftContract.waitForDeployment();
+  //   return { nftContract };
+  // }
 
   async function buyABXFixture() {
     // This is a fixture function that sets up the necessary conditions for buying 200 ABX.
-    const { contract, addr1, addr2, addr3 } = await loadFixture(
+    const { contract, addr1, addr2, addr3, nftcontract } = await loadFixture(
       deployCommunityFactoryFixture
     );
     await contract
       .connect(addr1)
       .buyABX(2000, { value: ethers.parseUnits("20000", "wei") });
-    return { contract, addr1, addr2, addr3 };
+    return { contract, addr1, addr2, addr3, nftcontract };
   }
 
   async function createCommunityFixture() {
     // This is a fixture function that sets up the necessary conditions for creating a community.
-    const { contract, addr1, addr2, addr3 } = await loadFixture(buyABXFixture);
+    const { contract, addr1, addr2, addr3, nftcontract } = await loadFixture(
+      buyABXFixture
+    );
     await contract
       .connect(addr1)
       .createCommunity("Test Community", "TST", "T", "TKT");
@@ -35,13 +55,12 @@ describe("ContractFactory", function () {
     const communityList = await contract.getAllCommunities();
     const communityAddr = communityList[0];
     // await contract.connect(addr2).joinCommunity(communityAddr);
-    return { contract, addr1, addr2, addr3, communityAddr };
+    return { contract, addr1, addr2, addr3, communityAddr, nftcontract };
   }
 
   async function publishProductFixture() {
-    const { contract, addr1, addr2, addr3, communityAddr } = await loadFixture(
-      createCommunityFixture
-    );
+    const { contract, addr1, addr2, addr3, communityAddr, nftcontract } =
+      await loadFixture(createCommunityFixture);
     // Join Community Address 2 and 3
     await contract.connect(addr2).joinCommunity(communityAddr);
     await contract.connect(addr3).joinCommunity(communityAddr);
@@ -59,7 +78,7 @@ describe("ContractFactory", function () {
     await contract
       .connect(addr1)
       .publishProduct("TP", "Test Product", communityAddr, true, 200);
-    return { contract, addr1, addr2, addr3, communityAddr };
+    return { contract, addr1, addr2, addr3, communityAddr, nftcontract };
   }
 
   describe("Buy ABX Token", function () {
@@ -218,7 +237,7 @@ describe("ContractFactory", function () {
       // create a community
       await contract
         .connect(addr1)
-        .createCommunity(anyValue, anyValue, anyValue, anyValue);
+        .createCommunity("anyValue", "anyValue", "anyValue", "anyValue");
       const communityList = await contract.getAllCommunities();
       const communityAddr = communityList[0];
       await contract.connect(addr2).joinCommunity(communityAddr);
@@ -617,7 +636,7 @@ describe("ContractFactory", function () {
 
     it("Should return 50% the product price for successful listing", async function () {
       // This test case checks if 50% is returned or not.
-      const { contract, addr1, addr2, addr3, communityAddr } =
+      const { contract, addr1, addr2, addr3, communityAddr, nftcontract } =
         await loadFixture(publishProductFixture);
 
       await contract.connect(addr2).buyCommToken(communityAddr, 400);
@@ -694,6 +713,177 @@ describe("ContractFactory", function () {
         creatorNativeTokenBalBefore +
           BigInt((Number(productInfo.prdPrice) * 25) / 100)
       );
+    });
+  });
+
+  describe("Test NFT Contract", function () {
+    it("Should call the NFTFactory contract", async function () {
+      // This test case checks if 50% is returned or not.
+      const { contract, addr1, addr2, addr3, communityAddr, nftcontract } =
+        await loadFixture(publishProductFixture);
+
+      await contract.connect(addr2).buyCommToken(communityAddr, 400);
+      await contract.connect(addr3).buyCommToken(communityAddr, 200);
+
+      // Time increasing
+      await time.increase(172400);
+      await contract.connect(addr2).upVote("TP", communityAddr, 200);
+      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+
+      const creatorNativeTokenBalBefore = await contract
+        .connect(addr1)
+        .getCommTokenBal(communityAddr);
+
+      // Increasing time for checkcing voting result
+      await time.increase(600);
+      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
+
+      const code = await contract.getCode(communityAddr, "TP", 200);
+      const productInfo = await contract.commListedProd(communityAddr, code);
+      // console.log("productInfo", productInfo);
+      expect(productInfo.listedForSale).to.equal(true);
+
+      //checking the native token balance of the creator
+      const creatorNativeTokenBalAfter = await contract
+        .connect(addr1)
+        .getCommTokenBal(communityAddr);
+
+      // console.log("creatorNativeTokenBalBefore", creatorNativeTokenBalBefore);
+      // console.log("creatorNativeTokenBalAfter", creatorNativeTokenBalAfter);
+      expect(creatorNativeTokenBalAfter).to.equal(
+        creatorNativeTokenBalBefore +
+          BigInt((Number(productInfo.prdPrice) * 50) / 100)
+      );
+      // const allMktProd = await contract.getAllMktPrd();
+      // console.log("allMktProd", allMktProd);
+
+      const nftOwner = await nftcontract.getOwner();
+      console.log("nftOwner", nftOwner);
+
+      const nftAddress = await nftcontract.getnftAddress(code);
+
+      const getInformation = await nftcontract.getNFTinformation(nftAddress);
+
+      console.log("getInformation", getInformation);
+    });
+
+    it("Should call the NFT contract", async function () {
+      // This test case checks if 50% is returned or not.
+      const { contract, addr1, addr2, addr3, communityAddr, nftcontract } =
+        await loadFixture(publishProductFixture);
+
+      await contract.connect(addr2).buyCommToken(communityAddr, 400);
+      await contract.connect(addr3).buyCommToken(communityAddr, 200);
+
+      // Time increasing
+      await time.increase(172400);
+      await contract.connect(addr2).upVote("TP", communityAddr, 200);
+      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+
+      const creatorNativeTokenBalBefore = await contract
+        .connect(addr1)
+        .getCommTokenBal(communityAddr);
+
+      // Increasing time for checkcing voting result
+      await time.increase(600);
+      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
+
+      const code = await contract.getCode(communityAddr, "TP", 200);
+      const productInfo = await contract.commListedProd(communityAddr, code);
+      // console.log("productInfo", productInfo);
+      expect(productInfo.listedForSale).to.equal(true);
+
+      //checking the native token balance of the creator
+      const creatorNativeTokenBalAfter = await contract
+        .connect(addr1)
+        .getCommTokenBal(communityAddr);
+
+      // console.log("creatorNativeTokenBalBefore", creatorNativeTokenBalBefore);
+      // console.log("creatorNativeTokenBalAfter", creatorNativeTokenBalAfter);
+      expect(creatorNativeTokenBalAfter).to.equal(
+        creatorNativeTokenBalBefore +
+          BigInt((Number(productInfo.prdPrice) * 50) / 100)
+      );
+      // const allMktProd = await contract.getAllMktPrd();
+      // console.log("allMktProd", allMktProd);
+
+      const nftOwner = await nftcontract.getOwner();
+      // console.log("nftOwner", nftOwner);
+
+      const nftAddress = await nftcontract.getnftAddress(code);
+
+      const getInformation = await nftcontract.getNFTinformation(nftAddress);
+
+      // console.log("getInformation", getInformation);
+
+      // Method - 1
+      // const NFT = await ethers.getContractFactory("NFT");
+      // const nft = await NFT.attach(nftAddress);
+      // Method - 2
+      const nft = await ethers.getContractAt("NFT", nftAddress);
+
+      const nftOwner1 = await nft.ownerOf(0);
+      // console.log("nftOwner1", nftOwner1);
+      expect(nftOwner1).to.equal(nftOwner);
+    });
+    it("Should approve the contract for selling NFT", async function () {
+      // This test case checks if 50% is returned or not.
+      const { contract, addr1, addr2, addr3, communityAddr, nftcontract } =
+        await loadFixture(publishProductFixture);
+
+      await contract.connect(addr2).buyCommToken(communityAddr, 400);
+      await contract.connect(addr3).buyCommToken(communityAddr, 200);
+
+      // Time increasing
+      await time.increase(172400);
+      await contract.connect(addr2).upVote("TP", communityAddr, 200);
+      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+
+      const creatorNativeTokenBalBefore = await contract
+        .connect(addr1)
+        .getCommTokenBal(communityAddr);
+
+      // Increasing time for checkcing voting result
+      await time.increase(600);
+      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
+
+      const code = await contract.getCode(communityAddr, "TP", 200);
+      const productInfo = await contract.commListedProd(communityAddr, code);
+      // console.log("productInfo", productInfo);
+      expect(productInfo.listedForSale).to.equal(true);
+
+      //checking the native token balance of the creator
+      const creatorNativeTokenBalAfter = await contract
+        .connect(addr1)
+        .getCommTokenBal(communityAddr);
+
+      // console.log("creatorNativeTokenBalBefore", creatorNativeTokenBalBefore);
+      // console.log("creatorNativeTokenBalAfter", creatorNativeTokenBalAfter);
+      expect(creatorNativeTokenBalAfter).to.equal(
+        creatorNativeTokenBalBefore +
+          BigInt((Number(productInfo.prdPrice) * 50) / 100)
+      );
+      // const allMktProd = await contract.getAllMktPrd();
+      // console.log("allMktProd", allMktProd);
+
+      const nftOwner = await nftcontract.getOwner();
+      // console.log("nftOwner", nftOwner);
+
+      const nftAddress = await nftcontract.getnftAddress(code);
+
+      const getInformation = await nftcontract.getNFTinformation(nftAddress);
+
+      // console.log("getInformation", getInformation);
+
+      // Method - 1
+      // const NFT = await ethers.getContractFactory("NFT");
+      // const nft = await NFT.attach(nftAddress);
+      // Method - 2
+      const nft = await ethers.getContractAt("NFT", nftAddress);
+
+      const nftOwner1 = await nft.ownerOf(0);
+      // console.log("nftOwner1", nftOwner1);
+      expect(nftOwner1).to.equal(nftOwner);
     });
   });
 });

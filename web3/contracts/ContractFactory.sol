@@ -76,6 +76,16 @@ contract ERC20Token is ERC20, Ownable {
     }
 }
 
+interface INFTfactory {
+    function listAsNFT(
+        string memory _name,
+        string memory _symbol,
+        string memory _uri,
+        bytes4 _uniCode,
+        address _creator
+    ) external;
+}
+
 /**
  * @title CommunityFactory
  * @dev Manages the creation and functionalities of communities and associated ERC20 tokens.
@@ -128,6 +138,7 @@ contract CommunityFactory {
 
     // State variables
     address private immutable ABXADDR;
+    INFTfactory public nftFactoryContract;
     ERC20Token public token;
     address[] listedCommunities;
     ProductInfo[] listedForVoting;
@@ -136,10 +147,11 @@ contract CommunityFactory {
     address public immutable contractOwner;
 
     // Constructor
-    constructor() {
+    constructor(address nftAddress) {
         contractOwner = msg.sender;
         ERC20Token newToken = new ERC20Token("ABX TOKEN", "ABX", msg.sender);
         ABXADDR = address(newToken);
+        nftFactoryContract = INFTfactory(nftAddress);
     }
 
     // Functions
@@ -324,7 +336,7 @@ contract CommunityFactory {
         }
         // Calculate the minimum required token balance
         // considering potential loss of precision due to division
-        uint256 min_token_balance = (prdPrice / 100) * 50;
+        uint256 min_token_balance = (prdPrice * 50) / 100;
 
         // Check if the token balance is sufficient
         if (getCommTokenBal(comAddr) < min_token_balance) {
@@ -421,7 +433,15 @@ contract CommunityFactory {
             isLocked = true;
 
             // Checking if the product is exclusive
-            if (commListedProd[communiAddr][code].isExclusive) {}
+            if (commListedProd[communiAddr][code].isExclusive) {
+                nftFactoryContract.listAsNFT(
+                    name,
+                    "TestSymbol",
+                    "TestURI",
+                    code,
+                    msg.sender
+                );
+            }
         } else {
             // if downvotes are more than upvotes
             // then cut 25% of product price and return 25% to the creator
