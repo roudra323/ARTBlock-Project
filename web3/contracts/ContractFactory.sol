@@ -403,11 +403,6 @@ contract CommunityFactory {
             revert UnauthorizedAccess();
         }
         // check if the voting time is still remaining
-        // console.log(
-        //     "Time: %s",
-        //     commListedProd[communiAddr][code].listedTime + 172800
-        // );
-        // console.log("Block Time: %s", block.timestamp);
         if (
             commListedProd[communiAddr][code].listedTime + 172800 >
             block.timestamp
@@ -424,9 +419,12 @@ contract CommunityFactory {
             isLocked = false;
             token.mint(msg.sender, (prdPrice / 100) * 50);
             isLocked = true;
+
+            // Checking if the product is exclusive
+            if (commListedProd[communiAddr][code].isExclusive) {}
+        } else {
             // if downvotes are more than upvotes
             // then cut 25% of product price and return 25% to the creator
-        } else {
             isLocked = false;
             token.mint(msg.sender, (prdPrice / 100) * 25); // returning 25% of product price if not voted
             isLocked = true;
