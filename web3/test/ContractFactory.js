@@ -758,13 +758,13 @@ describe("ContractFactory", function () {
       // console.log("allMktProd", allMktProd);
 
       const nftOwner = await nftcontract.getOwner();
-      console.log("nftOwner", nftOwner);
+      // console.log("nftOwner", nftOwner);
 
       const nftAddress = await nftcontract.getnftAddress(code);
 
       const getInformation = await nftcontract.getNFTinformation(nftAddress);
 
-      console.log("getInformation", getInformation);
+      // console.log("getInformation", getInformation);
     });
 
     it("Should call the NFT contract", async function () {

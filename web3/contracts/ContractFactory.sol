@@ -121,6 +121,8 @@ contract CommunityFactory {
         bool listedForSale;
         int256 voteWeight;
         uint listedTime;
+        address _creator;
+        address _owner;
     }
 
     // Events
@@ -358,7 +360,9 @@ contract CommunityFactory {
             true,
             false,
             0,
-            block.timestamp
+            block.timestamp,
+            msg.sender,
+            address(0)
         );
         // listed for vote = True
         listedForVoting.push(tempPrd);

@@ -7,6 +7,8 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+error NFTDoesNotExist();
+
 contract NFT is ERC721, ERC721URIStorage, Ownable {
     address private immutable mainContract;
     address private immutable creator;
@@ -86,15 +88,23 @@ contract NFTfactory {
             _symbol,
             _uri,
             _creator,
-            _creator
+            address(0)
         );
     }
 
     // Next the creator has to APPROVE for the NFT to this contract address
 
-    function changeNFTOwner(address newOwner) external {
-        require(address(nftAddr) != address(0), "NFT contract not deployed");
+    function changeNFTOwner(address newOwner, address nftAddress) external {
+        if (NFTinformation[nftAddress].creator != address(0)) {
+            revert NFTDoesNotExist();
+        }
+        // require(
+        //     NFTinformation[nftAddress].creator != address(0),
+        //     "NFT contract not deployed"
+        // );
+        nftAddr = NFT(nftAddress);
         nftAddr.transferFrom(nftAddr.ownerOf(0), newOwner, 0);
+        NFTinformation[address(nftAddr)].currentOwner = newOwner;
     }
 
     function getOwner() external view returns (address) {
