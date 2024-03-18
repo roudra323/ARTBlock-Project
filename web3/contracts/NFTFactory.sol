@@ -95,7 +95,7 @@ contract NFTfactory {
     // Next the creator has to APPROVE for the NFT to this contract address
 
     function changeNFTOwner(address newOwner, address nftAddress) external {
-        if (NFTinformation[nftAddress].creator != address(0)) {
+        if (NFTinformation[nftAddress].creator == address(0)) {
             revert NFTDoesNotExist();
         }
         // require(

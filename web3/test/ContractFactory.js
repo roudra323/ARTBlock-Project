@@ -865,25 +865,20 @@ describe("ContractFactory", function () {
       );
       // const allMktProd = await contract.getAllMktPrd();
       // console.log("allMktProd", allMktProd);
-
       const nftOwner = await nftcontract.getOwner();
-      // console.log("nftOwner", nftOwner);
-
       const nftAddress = await nftcontract.getnftAddress(code);
-
       const getInformation = await nftcontract.getNFTinformation(nftAddress);
-
-      // console.log("getInformation", getInformation);
-
-      // Method - 1
-      // const NFT = await ethers.getContractFactory("NFT");
-      // const nft = await NFT.attach(nftAddress);
-      // Method - 2
       const nft = await ethers.getContractAt("NFT", nftAddress);
-
       const nftOwner1 = await nft.ownerOf(0);
-      // console.log("nftOwner1", nftOwner1);
       expect(nftOwner1).to.equal(nftOwner);
+
+      // approve the contract for selling NFT
+      await nft.connect(addr1).approveContract(nftcontract);
+      await nftcontract.changeNFTOwner(addr3, nftAddress);
+      const nftOwner2 = await nftcontract.getOwner();
+      console.log("nftOwner2", nftOwner2);
+      console.log("addr3", addr3.address);
+      expect(nftOwner2).to.equal(addr3.address);
     });
   });
 });
