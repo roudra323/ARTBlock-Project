@@ -84,6 +84,10 @@ interface INFTfactory {
         bytes4 _uniCode,
         address _creator
     ) external;
+
+    function changeNFTOwner(address newOwner, address nftAddress) external;
+
+    function getnftAddress(bytes4 code) external view returns (address);
 }
 
 /**
@@ -362,7 +366,7 @@ contract CommunityFactory {
             0,
             block.timestamp,
             msg.sender,
-            address(0)
+            msg.sender
         );
         // listed for vote = True
         listedForVoting.push(tempPrd);
@@ -452,6 +456,47 @@ contract CommunityFactory {
             isLocked = false;
             token.mint(msg.sender, (prdPrice / 100) * 25); // returning 25% of product price if not voted
             isLocked = true;
+        }
+    }
+
+    function buyProduct(
+        string memory name,
+        address communiAddr,
+        uint256 prdPrice
+    ) external payable {
+        bytes4 code = getCode(communiAddr, name, prdPrice);
+        // check if the product is listed for sale
+        if (commListedProd[communiAddr][code].listedForSale == false) {
+            revert ProductNotFound();
+        }
+        // check if the caller has sent the specified amount of ether to buy the product
+        if (msg.value != prdPrice) {
+            revert InvalidAmount();
+        }
+        // check if the caller has enough balance to buy the product
+        if (getCommTokenBal(communiAddr) < 1) {
+            revert InsufficientBalance();
+        }
+
+        token = ERC20Token(communiAddr);
+        token.transferFrom(
+            msg.sender,
+            commListedProd[communiAddr][code]._owner,
+            prdPrice
+        );
+        commListedProd[communiAddr][code]._owner = msg.sender;
+        if (!commListedProd[communiAddr][code].isExclusive) {
+            nftFactoryContract.changeNFTOwner(
+                msg.sender,
+                nftFactoryContract.getnftAddress(code)
+            );
+        }
+        // Transfer the product price to the creator
+        (bool success, ) = commListedProd[communiAddr][code]._creator.call{
+            value: prdPrice
+        }("");
+        if (!success) {
+            revert TransferFailed();
         }
     }
 
