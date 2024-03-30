@@ -409,7 +409,7 @@ describe("ContractFactory", function () {
         createCommunityFixture
       );
       await expect(
-        contract.connect(addr2).downVote("Test", communityAddr, 200)
+        contract.connect(addr2).downVote("Test", communityAddr, 200, 1711736309)
       ).to.be.revertedWithCustomError(contract, "UnauthorizedAccess");
     });
     it("Should revert cause the product does not exist", async function () {
@@ -419,7 +419,7 @@ describe("ContractFactory", function () {
       );
       await contract.connect(addr2).joinCommunity(communityAddr);
       await expect(
-        contract.connect(addr2).upVote("Test", communityAddr, 200)
+        contract.connect(addr2).upVote("Test", communityAddr, 200, 1711736309)
       ).to.be.revertedWithCustomError(contract, "ProductNotFound");
     });
     it("Should fail cause voting time is over", async function () {
@@ -437,14 +437,14 @@ describe("ContractFactory", function () {
       await contract
         .connect(addr1)
         .publishProduct("TP", "Test Product", communityAddr, true, 200);
-      const productInfo = await contract.getCommProdInfo(
-        communityAddr,
-        "TP",
-        200
-      );
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
+      // console.log("productInfo", productInfo);
       await time.increase(Number(productInfo.listedTime) + 172900);
       await expect(
-        contract.connect(addr2).upVote("TP", communityAddr, 200)
+        contract
+          .connect(addr2)
+          .upVote("TP", communityAddr, 200, Number(productInfo.listedTime))
       ).to.be.revertedWithCustomError(contract, "VotingTimeError");
     });
 
@@ -463,15 +463,19 @@ describe("ContractFactory", function () {
       await contract
         .connect(addr1)
         .publishProduct("TP", "Test Product", communityAddr, true, 200);
-      const productInfo = await contract.getCommProdInfo(
-        communityAddr,
-        "TP",
-        200
-      );
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
       await time.increase(172600);
       // console.log("get time after increase", await time.latest());
-      const code = await contract.getCode(communityAddr, "TP", 200);
-      await contract.connect(addr2).upVote("TP", communityAddr, 200);
+      const code = await contract.getCode(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
+      await contract
+        .connect(addr2)
+        .upVote("TP", communityAddr, 200, Number(productInfo.listedTime));
       const voteCount = await contract.commProdVote(code);
       // console.log("voteCount", voteCount);
       expect(voteCount.toString()).to.equal("200");
@@ -490,10 +494,19 @@ describe("ContractFactory", function () {
       await contract
         .connect(addr1)
         .publishProduct("TP", "Test Product", communityAddr, true, 200);
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
       await time.increase(172600);
       // console.log("get time after increase", await time.latest());
-      await contract.connect(addr2).downVote("TP", communityAddr, 200);
-      const code = await contract.getCode(communityAddr, "TP", 200);
+      await contract
+        .connect(addr2)
+        .downVote("TP", communityAddr, 200, Number(productInfo.listedTime));
+      const code = await contract.getCode(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
       const voteCount = await contract.commProdVote(code);
       // console.log("voteCount", voteCount);
       expect(voteCount.toString()).to.equal("-200");
@@ -513,12 +526,25 @@ describe("ContractFactory", function () {
       await contract
         .connect(addr1)
         .publishProduct("TP", "Test Product", communityAddr, true, 200);
+
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
+
       await time.increase(172600);
       // console.log("get time after increase", await time.latest());
-      const code = await contract.getCode(communityAddr, "TP", 200);
-      await contract.connect(addr2).downVote("TP", communityAddr, 200);
+      const code = await contract.getCode(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
+      await contract
+        .connect(addr2)
+        .downVote("TP", communityAddr, 200, Number(productInfo.listedTime));
       await expect(
-        contract.connect(addr2).upVote("TP", communityAddr, 200)
+        contract
+          .connect(addr2)
+          .upVote("TP", communityAddr, 200, Number(productInfo.listedTime))
       ).to.be.revertedWithCustomError(contract, "AlreadyVoted");
     });
 
@@ -535,9 +561,14 @@ describe("ContractFactory", function () {
       await contract
         .connect(addr1)
         .publishProduct("TP", "Test Product", communityAddr, true, 200);
+
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
       await time.increase(172600);
       await expect(
-        contract.connect(addr2).upVote("TP", communityAddr, 200)
+        contract
+          .connect(addr2)
+          .upVote("TP", communityAddr, 200, Number(productInfo.listedTime))
       ).to.be.revertedWithCustomError(contract, "InsufficientBalance");
     });
 
@@ -549,11 +580,23 @@ describe("ContractFactory", function () {
       await contract.connect(addr2).buyCommToken(communityAddr, 100);
       await contract.connect(addr3).buyCommToken(communityAddr, 400);
 
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
+
       // Time increasing
       await time.increase(172600);
-      await contract.connect(addr2).upVote("TP", communityAddr, 200);
-      await contract.connect(addr3).downVote("TP", communityAddr, 200);
-      const code = await contract.getCode(communityAddr, "TP", 200);
+      await contract
+        .connect(addr2)
+        .upVote("TP", communityAddr, 200, Number(productInfo.listedTime));
+      await contract
+        .connect(addr3)
+        .downVote("TP", communityAddr, 200, Number(productInfo.listedTime));
+      const code = await contract.getCode(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
       const voteCount = await contract.commProdVote(code);
       // console.log("voteCount", voteCount);
       expect(voteCount.toString()).to.equal("-300");
@@ -566,8 +609,11 @@ describe("ContractFactory", function () {
       const { contract, addr1, addr2, communityAddr } = await loadFixture(
         createCommunityFixture
       );
+
       await expect(
-        contract.connect(addr1).votingResult("Test", communityAddr, 200)
+        contract
+          .connect(addr1)
+          .votingResult("Test", communityAddr, 200, 1711736309)
       ).to.be.revertedWithCustomError(contract, "ProductNotFound");
     });
     it("Should fail cause the caller is not the community owner", async function () {
@@ -578,14 +624,28 @@ describe("ContractFactory", function () {
       await contract.connect(addr2).buyCommToken(communityAddr, 100);
       await contract.connect(addr3).buyCommToken(communityAddr, 400);
 
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
+
       // Time increasing
       await time.increase(172600);
-      await contract.connect(addr2).upVote("TP", communityAddr, 200);
-      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+      await contract
+        .connect(addr2)
+        .upVote("TP", communityAddr, 200, Number(productInfo.listedTime));
+      await contract
+        .connect(addr3)
+        .downVote("TP", communityAddr, 200, Number(productInfo.listedTime));
       // const code = await contract.getCode(communityAddr, "TP", 200);
       // const productInfo = await contract.commListedProd(communityAddr, code);
       await expect(
-        contract.connect(addr2).votingResult("TP", communityAddr, 200)
+        contract
+          .connect(addr2)
+          .votingResult(
+            "TP",
+            communityAddr,
+            200,
+            Number(productInfo.listedTime)
+          )
       ).to.be.revertedWithCustomError(contract, "UnauthorizedAccess");
     });
 
@@ -597,14 +657,28 @@ describe("ContractFactory", function () {
       await contract.connect(addr2).buyCommToken(communityAddr, 100);
       await contract.connect(addr3).buyCommToken(communityAddr, 400);
 
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
+
       // Time increasing
       // await time.increase(172600);
-      await contract.connect(addr2).upVote("TP", communityAddr, 200);
-      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+      await contract
+        .connect(addr2)
+        .upVote("TP", communityAddr, 200, Number(productInfo.listedTime));
+      await contract
+        .connect(addr3)
+        .downVote("TP", communityAddr, 200, Number(productInfo.listedTime));
       // const code = await contract.getCode(communityAddr, "TP", 200);
       // const productInfo = await contract.commListedProd(communityAddr, code);
       await expect(
-        contract.connect(addr1).votingResult("TP", communityAddr, 200)
+        contract
+          .connect(addr1)
+          .votingResult(
+            "TP",
+            communityAddr,
+            200,
+            Number(productInfo.listedTime)
+          )
       ).to.be.revertedWithCustomError(contract, "VotingTimeError");
     });
 
@@ -616,19 +690,33 @@ describe("ContractFactory", function () {
       await contract.connect(addr2).buyCommToken(communityAddr, 400);
       await contract.connect(addr3).buyCommToken(communityAddr, 200);
 
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
+
       // Time increasing
       await time.increase(172400);
-      await contract.connect(addr2).upVote("TP", communityAddr, 200);
-      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+      await contract
+        .connect(addr2)
+        .upVote("TP", communityAddr, 200, Number(productInfo.listedTime));
+      await contract
+        .connect(addr3)
+        .downVote("TP", communityAddr, 200, Number(productInfo.listedTime));
 
       // Increasing time for checkcing voting result
       await time.increase(600);
-      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
+      await contract
+        .connect(addr1)
+        .votingResult("TP", communityAddr, 200, Number(productInfo.listedTime));
 
-      const code = await contract.getCode(communityAddr, "TP", 200);
-      const productInfo = await contract.commListedProd(communityAddr, code);
-      // console.log("productInfo", productInfo);
-      expect(productInfo.listedForSale).to.equal(true);
+      const product = await contract.getCommProdInfo(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
+
+      // console.log("productInfo", product);
+      expect(product.listedForSale).to.equal(true);
 
       // const allMktProd = await contract.getAllMktPrd();
       // console.log("allMktProd", allMktProd);
@@ -642,10 +730,17 @@ describe("ContractFactory", function () {
       await contract.connect(addr2).buyCommToken(communityAddr, 400);
       await contract.connect(addr3).buyCommToken(communityAddr, 200);
 
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
+
       // Time increasing
       await time.increase(172400);
-      await contract.connect(addr2).upVote("TP", communityAddr, 200);
-      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+      await contract
+        .connect(addr2)
+        .upVote("TP", communityAddr, 200, Number(productInfo.listedTime));
+      await contract
+        .connect(addr3)
+        .downVote("TP", communityAddr, 200, Number(productInfo.listedTime));
 
       const creatorNativeTokenBalBefore = await contract
         .connect(addr1)
@@ -653,12 +748,17 @@ describe("ContractFactory", function () {
 
       // Increasing time for checkcing voting result
       await time.increase(600);
-      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
-
-      const code = await contract.getCode(communityAddr, "TP", 200);
-      const productInfo = await contract.commListedProd(communityAddr, code);
+      await contract
+        .connect(addr1)
+        .votingResult("TP", communityAddr, 200, Number(productInfo.listedTime));
+      const product = await contract.getCommProdInfo(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
       // console.log("productInfo", productInfo);
-      expect(productInfo.listedForSale).to.equal(true);
+      expect(product.listedForSale).to.equal(true);
 
       //checking the native token balance of the creator
       const creatorNativeTokenBalAfter = await contract
@@ -683,10 +783,17 @@ describe("ContractFactory", function () {
       await contract.connect(addr2).buyCommToken(communityAddr, 100);
       await contract.connect(addr3).buyCommToken(communityAddr, 200);
 
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
+
       // Time increasing
       await time.increase(172400);
-      await contract.connect(addr2).upVote("TP", communityAddr, 200);
-      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+      await contract
+        .connect(addr2)
+        .upVote("TP", communityAddr, 200, Number(productInfo.listedTime));
+      await contract
+        .connect(addr3)
+        .downVote("TP", communityAddr, 200, Number(productInfo.listedTime));
 
       const creatorNativeTokenBalBefore = await contract
         .connect(addr1)
@@ -694,10 +801,10 @@ describe("ContractFactory", function () {
 
       // Increasing time for checkcing voting result
       await time.increase(600);
-      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
+      await contract
+        .connect(addr1)
+        .votingResult("TP", communityAddr, 200, Number(productInfo.listedTime));
 
-      const code = await contract.getCode(communityAddr, "TP", 200);
-      const productInfo = await contract.commListedProd(communityAddr, code);
       // console.log("productInfo", productInfo);
       expect(productInfo.listedForSale).to.equal(false);
 
@@ -725,10 +832,17 @@ describe("ContractFactory", function () {
       await contract.connect(addr2).buyCommToken(communityAddr, 400);
       await contract.connect(addr3).buyCommToken(communityAddr, 200);
 
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
+
       // Time increasing
       await time.increase(172400);
-      await contract.connect(addr2).upVote("TP", communityAddr, 200);
-      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+      await contract
+        .connect(addr2)
+        .upVote("TP", communityAddr, 200, Number(productInfo.listedTime));
+      await contract
+        .connect(addr3)
+        .downVote("TP", communityAddr, 200, Number(productInfo.listedTime));
 
       const creatorNativeTokenBalBefore = await contract
         .connect(addr1)
@@ -736,12 +850,18 @@ describe("ContractFactory", function () {
 
       // Increasing time for checkcing voting result
       await time.increase(600);
-      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
+      await contract
+        .connect(addr1)
+        .votingResult("TP", communityAddr, 200, Number(productInfo.listedTime));
 
-      const code = await contract.getCode(communityAddr, "TP", 200);
-      const productInfo = await contract.commListedProd(communityAddr, code);
+      const product = await contract.getCommProdInfo(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
       // console.log("productInfo", productInfo);
-      expect(productInfo.listedForSale).to.equal(true);
+      expect(product.listedForSale).to.equal(true);
 
       //checking the native token balance of the creator
       const creatorNativeTokenBalAfter = await contract
@@ -760,6 +880,13 @@ describe("ContractFactory", function () {
       const nftOwner = await nftcontract.getOwner();
       // console.log("nftOwner", nftOwner);
 
+      const code = await contract.getCode(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
+
       const nftAddress = await nftcontract.getnftAddress(code);
 
       const getInformation = await nftcontract.getNFTinformation(nftAddress);
@@ -775,10 +902,16 @@ describe("ContractFactory", function () {
       await contract.connect(addr2).buyCommToken(communityAddr, 400);
       await contract.connect(addr3).buyCommToken(communityAddr, 200);
 
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
       // Time increasing
       await time.increase(172400);
-      await contract.connect(addr2).upVote("TP", communityAddr, 200);
-      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+      await contract
+        .connect(addr2)
+        .upVote("TP", communityAddr, 200, Number(productInfo.listedTime));
+      await contract
+        .connect(addr3)
+        .downVote("TP", communityAddr, 200, Number(productInfo.listedTime));
 
       const creatorNativeTokenBalBefore = await contract
         .connect(addr1)
@@ -786,12 +919,26 @@ describe("ContractFactory", function () {
 
       // Increasing time for checkcing voting result
       await time.increase(600);
-      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
+      await contract
+        .connect(addr1)
+        .votingResult("TP", communityAddr, 200, Number(productInfo.listedTime));
 
-      const code = await contract.getCode(communityAddr, "TP", 200);
-      const productInfo = await contract.commListedProd(communityAddr, code);
+      const product = await contract.getCommProdInfo(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
+
+      const code = await contract.getCode(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
+
       // console.log("productInfo", productInfo);
-      expect(productInfo.listedForSale).to.equal(true);
+      expect(product.listedForSale).to.equal(true);
 
       //checking the native token balance of the creator
       const creatorNativeTokenBalAfter = await contract
@@ -834,10 +981,17 @@ describe("ContractFactory", function () {
       await contract.connect(addr2).buyCommToken(communityAddr, 400);
       await contract.connect(addr3).buyCommToken(communityAddr, 200);
 
+      const productsInfo = await contract.getAllPendingPrd();
+      const productInfo = productsInfo[0];
+
       // Time increasing
       await time.increase(172400);
-      await contract.connect(addr2).upVote("TP", communityAddr, 200);
-      await contract.connect(addr3).downVote("TP", communityAddr, 200);
+      await contract
+        .connect(addr2)
+        .upVote("TP", communityAddr, 200, Number(productInfo.listedTime));
+      await contract
+        .connect(addr3)
+        .downVote("TP", communityAddr, 200, Number(productInfo.listedTime));
 
       const creatorNativeTokenBalBefore = await contract
         .connect(addr1)
@@ -845,12 +999,26 @@ describe("ContractFactory", function () {
 
       // Increasing time for checkcing voting result
       await time.increase(600);
-      await contract.connect(addr1).votingResult("TP", communityAddr, 200);
+      await contract
+        .connect(addr1)
+        .votingResult("TP", communityAddr, 200, Number(productInfo.listedTime));
 
-      const code = await contract.getCode(communityAddr, "TP", 200);
-      const productInfo = await contract.commListedProd(communityAddr, code);
+      const product = await contract.getCommProdInfo(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
+
+      const code = await contract.getCode(
+        communityAddr,
+        "TP",
+        200,
+        Number(productInfo.listedTime)
+      );
+
       // console.log("productInfo", productInfo);
-      expect(productInfo.listedForSale).to.equal(true);
+      expect(product.listedForSale).to.equal(true);
 
       //checking the native token balance of the creator
       const creatorNativeTokenBalAfter = await contract
