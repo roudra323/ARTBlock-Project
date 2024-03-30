@@ -355,6 +355,8 @@ contract CommunityFactory {
         token.burn(msg.sender, min_token_balance);
         isLocked = true;
 
+        uint256 blockTime = block.timestamp;
+
         ProductInfo memory tempPrd = ProductInfo(
             name,
             description,
@@ -364,13 +366,17 @@ contract CommunityFactory {
             true,
             false,
             0,
-            block.timestamp,
+            blockTime,
             msg.sender,
             msg.sender
         );
         // listed for vote = True
         listedForVoting.push(tempPrd);
-        commListedProd[comAddr][getCode(comAddr, name, prdPrice)] = tempPrd; // created product
+
+        // Should Add blocktime
+        commListedProd[comAddr][
+            getCode(comAddr, name, prdPrice, blockTime)
+        ] = tempPrd; // created product
 
         // Testing
         // console.log("Product is published for voting!!");
@@ -380,13 +386,14 @@ contract CommunityFactory {
     function upVote(
         string memory name,
         address communiAddr,
-        uint256 prdPrice
+        uint256 prdPrice,
+        uint256 time
     )
         external
         onlyCommunityMember(communiAddr)
-        checkVotingRequirement(name, communiAddr, prdPrice)
+        checkVotingRequirement(name, communiAddr, prdPrice, time)
     {
-        bytes4 code = getCode(communiAddr, name, prdPrice);
+        bytes4 code = getCode(communiAddr, name, prdPrice, time);
         uint256 tokenBalance = getCommTokenBal(communiAddr);
         commProdVote[code] += int256(tokenBalance);
         // console.log("TOken Balance", tokenBalance);
@@ -396,13 +403,14 @@ contract CommunityFactory {
     function downVote(
         string memory name,
         address communiAddr,
-        uint256 prdPrice
+        uint256 prdPrice,
+        uint256 time
     )
         external
         onlyCommunityMember(communiAddr)
-        checkVotingRequirement(name, communiAddr, prdPrice)
+        checkVotingRequirement(name, communiAddr, prdPrice, time)
     {
-        bytes4 code = getCode(communiAddr, name, prdPrice);
+        bytes4 code = getCode(communiAddr, name, prdPrice, time);
         uint256 tokenBalance = getCommTokenBal(communiAddr);
         commProdVote[code] -= int256(tokenBalance);
         hasVoted[msg.sender][code] = true;
@@ -411,9 +419,10 @@ contract CommunityFactory {
     function votingResult(
         string memory name,
         address communiAddr,
-        uint256 prdPrice
+        uint256 prdPrice,
+        uint256 time
     ) external {
-        bytes4 code = getCode(communiAddr, name, prdPrice);
+        bytes4 code = getCode(communiAddr, name, prdPrice, time);
         // check if the product is listed for vote
         if (commListedProd[communiAddr][code].listedForVote == false) {
             revert ProductNotFound();
@@ -462,9 +471,10 @@ contract CommunityFactory {
     function buyProduct(
         string memory name,
         address communiAddr,
-        uint256 prdPrice
+        uint256 prdPrice,
+        uint256 time
     ) external payable {
-        bytes4 code = getCode(communiAddr, name, prdPrice);
+        bytes4 code = getCode(communiAddr, name, prdPrice, time);
         // check if the product is listed for sale
         if (commListedProd[communiAddr][code].listedForSale == false) {
             revert ProductNotFound();
@@ -521,9 +531,10 @@ contract CommunityFactory {
     function getCode(
         address comm,
         string memory name,
-        uint256 price
+        uint256 price,
+        uint256 time
     ) public pure returns (bytes4) {
-        bytes memory data = abi.encodePacked(comm, name, price);
+        bytes memory data = abi.encodePacked(comm, name, price, time);
         return bytes4(keccak256(data));
     }
 
@@ -540,9 +551,10 @@ contract CommunityFactory {
     function getCommProdInfo(
         address comm,
         string memory name,
-        uint16 price
+        uint256 price,
+        uint256 time
     ) public view returns (ProductInfo memory) {
-        return commListedProd[comm][getCode(comm, name, price)];
+        return commListedProd[comm][getCode(comm, name, price, time)];
     }
 
     // Modifiers
@@ -571,9 +583,10 @@ contract CommunityFactory {
     modifier checkVotingRequirement(
         string memory name,
         address communiAddr,
-        uint256 prdPrice
+        uint256 prdPrice,
+        uint256 time
     ) {
-        bytes4 code = getCode(communiAddr, name, prdPrice);
+        bytes4 code = getCode(communiAddr, name, prdPrice, time);
         // Check if the product exists
         // console.log(commListedProd[communiAddr][code]);
         if (commListedProd[communiAddr][code].listedForVote == false) {
